@@ -2,9 +2,9 @@ import torch.nn.functional as F
 
 from .model_parts import *
 
-class model(nn.Module):
+class LogoDetectionModel(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):
-        super(model, self).__init__()
+        super(LogoDetectionModel, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
