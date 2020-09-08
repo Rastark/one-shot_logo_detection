@@ -8,12 +8,12 @@ class ConditioningBranch(nn.Module):
 
     def __init__(self, 
                 logos, 
-                dataset,
+                # dataset,
                 model: str = "vgg16_pre"):
 
         super(ConditioningBranch, self).__init__() 
         self.logos = logos
-        self.dataset = dataset
+        # self.dataset = dataset
         self.model_name = model
 
         supported_models = {

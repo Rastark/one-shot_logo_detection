@@ -1,16 +1,29 @@
 import torch.nn.functional as F
 
 from .model_parts import *
+from .conditioning import *
 
 class LogoDetectionModel(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=True):
+    def __init__(self, 
+                n_channels, 
+                n_classes, 
+                dataset,
+                logos,
+                cond_branch_nn: str = "vgg16_pre"
+                bilinear=True):
         super(LogoDetectionModel, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
+        self.dataset = dataset
+        
+        self.cond_branch = ConditioningBranch(logos, cond_branch_nn) 
+        self.cond_out = cond_branch.get_vgg16_pre_out()
 
         # Encoder steps
         self.step1 = Encoder(n_channels, 64)
+
+        
         self.step2 = Encoder(64, 128)
         self.step3 = Encoder(128, 256)
         self.step4 = Encoder(256, 512)
