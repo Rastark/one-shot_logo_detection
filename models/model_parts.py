@@ -26,21 +26,21 @@ class DoubleConv(nn.Module):
         return self.double_conv(x)
 
 
-class Down(nn.Module):
-    """Downscaling with maxpool then double conv"""
+class Encoder(nn.Module):
+    """Double conv 3x3, then max pool 2x2 stride 2"""
 
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.maxpool_conv = nn.Sequential(
-            nn.MaxPool2d(2),
-            DoubleConv(in_channels, out_channels)
+            DoubleConv(in_channels, out_channels),
+            nn.MaxPool2d(2, stride=2)
         )
 
     def forward(self, x):
         return self.maxpool_conv(x)
 
 
-class Up(nn.Module):
+class Decoder(nn.Module):
     """Upscaling then double conv"""
 
     def __init__(self, in_channels, out_channels, bilinear=True):

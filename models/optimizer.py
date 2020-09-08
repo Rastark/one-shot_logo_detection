@@ -10,7 +10,7 @@ class Optimizer:
 
     def __init__(self,
         model: LogoDetectionModel,
-        optimizer_name: str = "Adam",
+        optimizer: str = "Adam",
         batch_size: int = 128,
         learning_rate: float = 1e-4,
         adam_decay_1: float = 0.9,
@@ -32,7 +32,7 @@ class Optimizer:
     }
 
     # choose which Torch Optimizer object to use, based on the passed name
-    self.optimizer = supported_optimizers[optimizer_name]
+    self.optimizer = supported_optimizers[optimizer]
 
     # Evaluator selection
 

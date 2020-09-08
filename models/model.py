@@ -9,16 +9,18 @@ class LogoDetectionModel(nn.Module):
         self.n_classes = n_classes
         self.bilinear = bilinear
 
-        self.inc = DoubleConv(n_channels, 64)
-        self.down1 = Down(64, 128)
-        self.down2 = Down(128, 256)
-        self.down3 = Down(256, 512)
-        factor = 2 if bilinear else 1
-        self.down4 = Down(512, 1024 // factor)
-        self.up1 = Up(1024, 512 // factor, bilinear)
-        self.up2 = Up(512, 256 // factor, bilinear)
-        self.up3 = Up(256, 128 // factor, bilinear)
-        self.up4 = Up(128, 64, bilinear)
+        # Encoder steps
+        self.step1 = Encoder(n_channels, 64)
+        self.step2 = Encoder(64, 128)
+        self.step3 = Encoder(128, 256)
+        self.step4 = Encoder(256, 512)
+        self.step5 = Encoder(512, 512)      # 1/(2^5)*(width x height) x 512
+
+        # Decoder steps
+        self.up1 = Decoder(1024, 512)
+        self.up2 = Decoder(512, 256)
+        self.up3 = Decoder(256, 128)
+        self.up4 = Decoder(128, 64)
         self.outc = OutConv(64, n_classes)
 
     def forward(self, x):
