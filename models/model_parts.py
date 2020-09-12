@@ -26,7 +26,7 @@ class DoubleConv(nn.Module):
         return self.double_conv(x)
 
 
-class Encoder(nn.Module):
+class Downsampler(nn.Module):
     """Double conv 3x3, then max pool 2x2 stride 2"""
 
     def __init__(self, in_channels, out_channels):
@@ -40,7 +40,7 @@ class Encoder(nn.Module):
         return self.maxpool_conv(x)
 
 
-class Decoder(nn.Module):
+class Upsampler(nn.Module):
     """Upscaling then double conv"""
 
     def __init__(self, in_channels, out_channels, bilinear=True):

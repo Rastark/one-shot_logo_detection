@@ -10,7 +10,7 @@ class Optimizer:
 
     def __init__(self,
         model: LogoDetectionModel,
-        optimizer: str = "Adam",
+        optimizer: str = "SGD",
         batch_size: int = 128,
         learning_rate: float = 1e-4,
         adam_decay_1: float = 0.9,

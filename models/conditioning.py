@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -7,12 +8,12 @@ import torchvision.transforms as transforms
 class ConditioningBranch(nn.Module):
 
     def __init__(self, 
-                logos, 
+                # logos, 
                 # dataset,
                 model: str = "vgg16_pre"):
 
         super(ConditioningBranch, self).__init__() 
-        self.logos = logos
+        # self.logos = logos
         # self.dataset = dataset
         self.model_name = model
 
@@ -31,7 +32,7 @@ class ConditioningBranch(nn.Module):
         # Applies a series of transformations to the image in order to classify it correctly
         preprocess = transforms.Compose([
             transforms.Resize(256),
-            transforms.CenterCrop(224),       # Resizes the image to 64x64
+            transforms.CenterCrop(224),     
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])     # Mandatory to use the pretrained model
         ])
@@ -44,12 +45,12 @@ class ConditioningBranch(nn.Module):
 
         with torch.no_grad():
             output = self.model(input_batch)
-        # Tensor of shape 1000, with confidence scores over Imagenet's 1000 classes
-        print(output[0])
-        # The output has unnormalized scores. To get probabilities, you can run a softmax on it.
-        print(torch.nn.functional.softmax(output[0], dim=0))
+        return output[0]
+        # # Tensor of shape 1000, with confidence scores over Imagenet's 1000 classes
+        # print(output[0])
+        # # The output has unnormalized scores. To get probabilities, you can run a softmax on it.
+        # print(torch.nn.functional.softmax(output[0], dim=0))
         
-    
 
 
 
