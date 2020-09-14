@@ -15,7 +15,7 @@ class Optimizer:
         learning_rate: float = 1e-4,
         adam_decay_1: float = 0.9,
         adam_decay_2: float = 0.99,
-        weight_decay: float = 0.0,
+        weight_decay: float = 0.0,      # L2 regularization
         label_smooth: float = 0.1,      # If we want to implement label smoothing (?)
         verbose: bool = True):
 

@@ -21,23 +21,23 @@ class VGG(nn.Module):
         super(VGG, self).__init__()
         self.features = features
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))        
-        self.classifier = nn.Sequential(
-            nn.Linear(512 * 7 * 7, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, num_classes),
-        )
+        # self.classifier = nn.Sequential(
+        #     nn.Linear(512 * 7 * 7, 4096),
+        #     nn.ReLU(True),
+        #     nn.Dropout(),
+        #     nn.Linear(4096, 4096),
+        #     nn.ReLU(True),
+        #     nn.Dropout(),
+        #     nn.Linear(4096, num_classes),
+        # )
         if init_weights:
             self._initialize_weights()
 
     def forward(self, x):
         x = self.features(x)
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.classifier(x)
+        # x = self.avgpool(x)
+        # x = torch.flatten(x, 1)
+        # x = self.classifier(x)
         return x
 
     def _initialize_weights(self):
@@ -88,7 +88,7 @@ def vgg16_tiles(tile_dim, progress=True, **kwargs):
     r""" Output of the Conditioning Branch
     Tiles 1*1*512 vectors into tile_dim*tile_dim*512 tensors
     """
-    model = _vgg('vgg16', 'D', False, progress, **kwargs)
+    model = _vgg('vgg16', 'X', False, progress, **kwargs)
     return model.repeat(tile_dim, tile_dim)
 
 def vgg16(progress=True, **kwargs):
@@ -98,7 +98,7 @@ def vgg16(progress=True, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _vgg('vgg16', 'D', False, progress, **kwargs)
+    return _vgg('vgg16', 'X', False, progress, **kwargs)
 
 
 def vgg16_bn(progress=True, **kwargs):
