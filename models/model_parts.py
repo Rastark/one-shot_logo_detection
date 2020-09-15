@@ -45,29 +45,12 @@ class Upscaler(nn.Module):
 
     def __init__(self, in_channels, out_channels, bilinear=True):
         super().__init__()
+        self.double_conv = DoubleConv(in_channels, in_channels)
+        self.upscale = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
 
-        # if bilinear, use the normal convolutions to reduce the number of channels
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
-        else:
-            self.up = nn.ConvTranspose2d(in_channels , in_channels // 2, kernel_size=2, stride=2)
-            self.conv = DoubleConv(in_channels, out_channels)
-
-
-    def forward(self, x1, x2):
-        x1 = self.up(x1)
-        # input is CHW
-        diffY = x2.size()[2] - x1.size()[2]
-        diffX = x2.size()[3] - x1.size()[3]
-
-        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2])
-        # if you have padding issues, see
-        # https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Bu1ggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
-        # https://github.com/xiaopeng-liao/Pytorch-UNet/commit/8ebac70e633bac59fc22bb5195e513d5832fb3bd
-        x = torch.cat([x2, x1], dim=1)
-        return self.conv(x)
+    def forward(self, x):
+        x = self.double_conv(x)
+        return self.upscale(x)        
 
 
 class OutConv(nn.Module):
@@ -81,26 +64,6 @@ class OutConv(nn.Module):
 
 
 # Conditioning Branch
-# class Tile(nn.Module):
-#     def __init__(self, width, height):
-#         super(Tile, self).__init__()
-#         self.width = width
-#         self.height = height
-        
-#     def forward(self, x):
-#         return x.repeat(self.width, self.height)
-
-
-# class TileConcat(nn.Module):
-#     def __init__(self):
-#         super(TileConcat, self).__init__()
-#         self.tile = tile_model.repeat(width, height)
-        
-        
-#     def forward(self, x):
-#         return torch.cat(x, self.tile, dim=-1)
-
-
 class OneOneConv(nn.Module):
     def __init__(self, in_channels):
         super(OneOneConv, self).__init__()
