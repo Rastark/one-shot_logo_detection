@@ -43,7 +43,7 @@ class Downscaler(nn.Module):
 class Upscaler(nn.Module):
     """Upscaling then double conv"""
 
-    def __init__(self, in_channels, out_channels, bilinear=True):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
         self.double_conv = DoubleConv(in_channels, in_channels)
         self.upscale = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
@@ -56,7 +56,7 @@ class Upscaler(nn.Module):
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+        self.conv = DoubleConv(in_channels, out_channels, kernel_size=1)
 
 
     def forward(self, x):
@@ -65,27 +65,30 @@ class OutConv(nn.Module):
 
 # Conditioning Branch
 class OneOneConv(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, out_channels):
         super(OneOneConv, self).__init__()
-        self.in_channels = in_channels
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True)
+        )
 
     def forward(self, x):
-        return nn.Conv2d(self.in_channels, self.in_channels, kernel_size=1)
+        return self.conv(x)
 
 
-class ConditioningConcat(nn.Module):
-    def __init__(self, tile_concat):
-        super(ConditioningConcat, self).__init__()
-        self.filtered_tile = OneOneConv(self.tile_concat)       # Here or in forward method?
+# class ConditioningConcat(nn.Module):
+#     def __init__(self, tile_concat):
+#         super(ConditioningConcat, self).__init__()
+#         self.filtered_tile = OneOneConv(self.tile_concat)       # Here or in forward method?
 
-    def forward(self, x):
-        return torch.cat(x, self.filtered_tile, dim=-1)
+#     def forward(self, x):
+#         return torch.cat(x, self.filtered_tile, dim=-1)
 
 
 class VGG16(nn.Module):
-    def __init__(self, features, batch_norm=False, cfg='A'):
+    def __init__(self, batch_norm=False, cfg='A'):
         super(VGG16, self).__init__()
-        self.features = features
         self.batch_norm = batch_norm
 
         self.cfgs = {
