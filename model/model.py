@@ -5,28 +5,28 @@ from .model_parts import *
 
 class LogoDetectionModel(nn.Module):
     def __init__(self, 
-                n_channels: int, 
-                n_classes: int, 
                 dataset: Dataset,
-                logos,
                 batch_norm=False,
                 cfg='A'):
         super(LogoDetectionModel, self).__init__()
         self.dataset = dataset
-        self.n_channels = dataset.n_channels
-        self.n_classes = dataset.n_classes
-        self.logos = dataset.logos
-        # self.cond_branch = ConditioningBranch(cond_branch_nn) 
-
+        self.n_channels = dataset.shape
+        # self.q_shape = dataset.shape[0]
+        # self.t_shape = dataset.shape[1]
+        # self.logos = dataset.logos
+        # self.cond_weights = torch.normal(0, 0.01, size=self.q_shape, requires_grad=True).cuda()
+        # self.segm_weights = torch.normal(0, 0.01, size=self.t_shape, requires_grad=True).cuda()
+        
+        
         # Encoder steps
-        self.input_layer = Downscaler(n_channels, 64)
+        self.input_layer = Downscaler(self.n_channels, 64)
         self.down_layer1 = Downscaler(64, 128)
         self.down_layer2 = Downscaler(128, 256)
         self.down_layer3 = Downscaler(256, 512)
         self.down_layer4 = Downscaler(512, 512)      # 1/(2^5)*(width x height) x 512
 
         # Conditioning Module
-        self.vgg16 = VGG16(batch_norm, cfg)     
+        self.latent_repr = VGG16(batch_norm, cfg)     
         self.one_conv1 = OneOneConv(576, 64)      # 64+512
         self.one_conv2 = OneOneConv(640, 128)     # 128+512
         self.one_conv3 = OneOneConv(768, 256)     # 256+512
@@ -40,29 +40,31 @@ class LogoDetectionModel(nn.Module):
         self.up5 = Upscaler(64, 1)      # How many output channels?
 
 
-    def forward(self, x, z):
-
-        latent_repr = self.vgg16(z)
+    def forward(self, samples):
+        
+        query = samples[:, 0]
+        target = samples[:, 1]
+        z = self.latent_repr(query)
         
         # Encoder + Conditioning
-        x = self.input_layer(x)
-        tile = latent_repr.repeat(128,128)
+        x = self.input_layer(target)
+        tile = z.repeat(128,128)
         x1 = torch.cat(x, tile, dim=-1)
 
         x = self.down_layer1(x)
-        tile = latent_repr.repeat(64,64)
+        tile = z.repeat(64,64)
         x2 = torch.cat(x, tile, dim=-1)
 
         x = self.down_layer2(x)
-        tile = latent_repr.repeat(32,32)
+        tile = z.repeat(32,32)
         x3 = torch.cat(x, tile, dim=-1)
 
         x = self.down_layer3(x)
-        tile = latent_repr.repeat(16,16)
+        tile = z.repeat(16,16)
         x4 = torch.cat(x, tile, dim=-1)
 
         x = self.down_layer4(x)
-        tile = latent_repr.repeat(8,8)
+        tile = z.repeat(8,8)
         x5 = torch.cat(x, tile, dim=-1)
         
         # Decoder + Conditioning
