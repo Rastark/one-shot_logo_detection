@@ -2,10 +2,11 @@ import torch
 import torch.nn.functional as F
 
 from .model_parts import *
+from ..utils.datasetLoader import BasicDataset
 
 class LogoDetectionModel(nn.Module):
     def __init__(self, 
-                dataset: Dataset,
+                dataset: BasicDataset,
                 batch_norm=False,
                 cfg='A'):
         super(LogoDetectionModel, self).__init__()
@@ -38,7 +39,7 @@ class LogoDetectionModel(nn.Module):
         self.up3 = Upscaler(256, 128)
         self.up4 = Upscaler(128, 64)
         self.up5 = Upscaler(64, 1)      # How many output channels?
-
+        self.output_layer = OutSoftmax()
 
     def forward(self, samples):
         
@@ -87,5 +88,5 @@ class LogoDetectionModel(nn.Module):
         x = torch.cat(x, x1, dim=-1)
         x = self.up5(x)
 
-        output = nn.Softmax(x)
+        output = self.output_layer(x)
         return output

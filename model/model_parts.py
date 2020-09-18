@@ -53,14 +53,16 @@ class Upscaler(nn.Module):
         return self.upscale(x)        
 
 
-class OutConv(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(OutConv, self).__init__()
-        self.conv = DoubleConv(in_channels, out_channels, kernel_size=1)
-
+class OutSoftmax(nn.Module):
+    def __init__(self):
+        super(OutSoftmax, self).__init__()
+        self.softmax = nn.Sequential(
+            nn.ReLU(inplace=True),
+            nn.Softmax()
+        )
 
     def forward(self, x):
-        return self.conv(x)
+        return self.softmax(x)
 
 
 # Conditioning Branch

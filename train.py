@@ -140,6 +140,74 @@ def train(model,
           label_smooth,
           verbose)
 
+    for e in range(max_epochs):
+        self.model.train()
+        self.epoch(batch_size, train_samples)
+
+        # # WIP
+        # # Launches evaluation on the model every evaluate_every steps.
+        # # We need to change to appropriate evaluation metrics.
+        # if evaluate_every > 0 and valid_samples is not None and (e + 1) % evaluate_every == 0:
+        #     self.model.eval()
+        #     with torch.no_grad():
+        #         mrr, h1 = self.evaluator.eval(samples=valid_samples, write_output= False) 
+            
+        #     # Metrics printing
+        #     print("\tValidation: %f" % h1)
+            
+        # if save_path is not None:
+        #     print("\tSaving model...")
+        #     torch.save(self.model.state_dict(), save_path)
+        # print("\tDone.")
+
+    def epoch(self,
+        batch_size: int,
+        train_samples: np.array):
+
+        n_samples = train_samples.shape[0]
+
+        # Moving samples to GPU and random shuffling them
+        train_samples = torch.from_numpy(train_samples).cuda()
+        randomized_samples = train_samples[torch.randperm(n_samples), :]
+
+        loss = torch.nn.BCELoss() * (1/256*256)
+
+        # Training over batches
+
+        # Progress bar
+        with tqdm.tqdm(total=n_samples, unit="ex", disable=not self.verbose) as bar:
+            bar.set_description(f'train loss')
+
+            batch_start = 0
+            while batch_start < n_samples:
+                batch_end = min(batch_start + batch_size, n_samples)
+                batch = randomized_samples[batch]
+
+                l = self.step_on_batch(loss, batch)
+
+                batch_start += self.batch_size
+                bar.update(batch.shape[0])
+                bar.set_postfix(loss=f'{l.item():.5f}')1
+
+    # Computing the loss over a single batch
+    def step_on_batch(self, loss, batch):
+        prediction = self.model.forward(batch)
+        truth = batch[:, 3]
+
+        # # Label smoothing (?)
+        # truth = (1.0 - self.label_smooth)*truth + (1.0 / truth.shape[1])
+        
+        # Compute loss
+        l = loss(prediction, truth)
+
+        # Compute loss gradients and run optimization step
+        self.optimizer.zero_grad()
+        l.backward()
+        self.optmizer.step()
+
+        #return loss
+        return l
+
 print("\nEvaluating model...")
 model.eval()
 mrr, h1 = Evaluator(model=model).eval(samples=dataset.test_samples, write_output=False)
@@ -178,7 +246,7 @@ class Optimizer:
 
     for e in range(max_epochs):
         self.model.train()
-        self.epoch(batch_size, training_samples)
+        self.epoch(batch_size, train_samples)
 
         # WIP
         # Launches evaluation on the model every evaluate_every steps.
@@ -198,25 +266,25 @@ class Optimizer:
 
     def epoch(self,
         batch_size: int,
-        training_samples: np.array):
+        train_samples: np.array):
 
-        samples_number = training_samples.shape[0]
+        n_samples = train_samples.shape[0]
 
         # Moving samples to GPU and random shuffling them
-        training_samples = torch.from_numpy(training_samples).cuda()
-        randomized_samples = training_samples[torch.randperm(samples_number), :]
+        train_samples = torch.from_numpy(train_samples).cuda()
+        randomized_samples = train_samples[torch.randperm(n_samples), :]
 
         loss = torch.nn.BCELoss()
 
         # Training over batches
 
         # Progress bar
-        with tqdm.tqdm(total=samples_number, unit="ex", disable=not self.verbose) as bar:
+        with tqdm.tqdm(total=n_samples, unit="ex", disable=not self.verbose) as bar:
             bar.set_description(f'train loss')
 
             batch_start = 0
-            while batch_start < samples_number:
-                batch_end = min(batch_start + batch_size, samples_number)
+            while batch_start < n_samples:
+                batch_end = min(batch_start + batch_size, n_samples)
                 batch = randomized_samples[batch]
 
                 l = self.step_on_batch(loss, batch)
