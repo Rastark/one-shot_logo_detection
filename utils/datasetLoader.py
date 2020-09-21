@@ -9,22 +9,35 @@ import logging
 from PIL import Image
 
 
+# TODO: Ha da funzionà co TorchVision, se hai tempo
+# TODO: Prendi una query per ogni immagine e usala come query image per l'immagine
 class BasicDataset(Dataset):
+    # TODO: Fai in modo che funzioni su più dataset. Non gli va scritto il path del singolo dataset ma deve prenderlo da solo
     def __init__(self, imgs_dir, masks_dir, mask_image_dim=128, query_dim=64, mask_suffix='.bboxes.txt'):
         self.imgs_dir = imgs_dir
         self.masks_dir = masks_dir
+        self.processed_img_dir = str(imgs_dir[:imgs_dir.rindex(os.path.sep)]) + os.path.sep + "processed"
         self.mask_image_dim = mask_image_dim
         self.query_dim = query_dim
         self.mask_suffix = mask_suffix
         assert mask_image_dim > 1, 'The dimension of mask and image must be higher than 1'
         assert query_dim > 1, 'The dimension of query image must be higher than 1'
 
+        # create processed directory, if not exists yet
+        try:
+            os.mkdir(self.processed_img_dir)
+        except FileExistsError:
+            # some previous instance generate this directory, no need to raise an exception
+            pass
+
         self.ids = []
         # put in "ids" every not merged mask
         for path, _, files in os.walk(masks_dir):
             for name in files:
                 if "png" in name and "merged" not in name:
+                    # TODO: Non salvare tutto il path ma solo "classe/file"
                     self.ids.append(os.path.join(path, name))
+        # print(len(self.ids))
         # Old version
         # self.ids = [splitext(file)[0] for file in listdir(imgs_dir)
         #             if not file.startswith('.')]
@@ -39,7 +52,7 @@ class BasicDataset(Dataset):
 
     # TODO: Correggere il problema relativo alla classe HP (la cartella in "jpg" è in uppercase mentre in "masks" è in lowercase)
     @classmethod
-    def preprocess(cls, mask, dim_img, dim_mask, mask_suffix):
+    def preprocess(cls, index, mask, dim_img, dim_mask, processed_img_dir, mask_suffix):
         # the number in the filename is the line+1 in the boundingbox file
         number_line_bbox_file = int(mask.split(".")[-2])
         # switch between "jpg" and "masks" directory
@@ -80,11 +93,21 @@ class BasicDataset(Dataset):
         pil_mask = Image.open(mask)
         pil_resized_mask = pil_mask.resize((dim_img, dim_img))
 
+        torch_representation = (to_pytorch(pil_resized_target_image), to_pytorch(pil_resized_query_image), to_pytorch(pil_resized_mask))
+        # save the file so the next time you don't have to preprocess again
+        # there is a more efficient way to to this. check this link: https://stackoverflow.com/questions/9619199/best-way-to-preserve-numpy-arrays-on-disk
+        np.savez(f'{processed_img_dir}{os.path.sep}{index}', target=torch_representation[0], query=torch_representation[1], mask=torch_representation[2])
         # return the triplet (Dq, Dt, Dm) where Dq is the query image, Dt is the target image and Dm is the mask image
-        return to_pytorch(pil_resized_target_image), to_pytorch(pil_resized_query_image), to_pytorch(pil_resized_mask)
+        return torch_representation
 
     def __getitem__(self, i):
-        return self.preprocess(self.ids[i], self.mask_image_dim, self.query_dim, self.mask_suffix)
+        file_path = f'{self.processed_img_dir}{os.path.sep}{i}.npz'
+        if os.path.exists(file_path):
+            data = np.load(file_path, mmap_mode='r')
+            return_tuple = (data['target'], data['query'], data['mask'])
+        else:
+            return_tuple = (self.preprocess(i, self.ids[i], self.mask_image_dim, self.query_dim, self.processed_img_dir, self.mask_suffix))
+        return return_tuple
 
     # Old version
     # @classmethod
