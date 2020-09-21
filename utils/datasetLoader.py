@@ -10,7 +10,8 @@ from PIL import Image
 
 
 # TODO: Ha da funzionà co TorchVision, se hai tempo
-# TODO: Prendi una query per ogni immagine e usala come query image per l'immagine
+# TODO: Prendi una query per ogni immagine e usala come query image per l'immagine. Modificata con il TODO successivo
+# TODO: Prendi la prima query image, la target image e la merged_mask
 class BasicDataset(Dataset):
     # TODO: Fai in modo che funzioni su più dataset. Non gli va scritto il path del singolo dataset ma deve prenderlo da solo
     def __init__(self, imgs_dir, masks_dir, mask_image_dim=128, query_dim=64, mask_suffix='.bboxes.txt'):
@@ -89,14 +90,15 @@ class BasicDataset(Dataset):
                 # crop and resize the query image
                 pil_query_image = pil_resized_target_image.crop((left, upper, right, lower))
                 pil_resized_query_image = pil_query_image.resize((dim_mask, dim_mask))
+
         # Mask
         pil_mask = Image.open(mask)
         pil_resized_mask = pil_mask.resize((dim_img, dim_img))
 
-        torch_representation = (to_pytorch(pil_resized_target_image), to_pytorch(pil_resized_query_image), to_pytorch(pil_resized_mask))
+        torch_representation = (to_pytorch(pil_resized_query_image), to_pytorch(pil_resized_target_image), to_pytorch(pil_resized_mask))
         # save the file so the next time you don't have to preprocess again
-        # there is a more efficient way to to this. check this link: https://stackoverflow.com/questions/9619199/best-way-to-preserve-numpy-arrays-on-disk
-        np.savez(f'{processed_img_dir}{os.path.sep}{index}', target=torch_representation[0], query=torch_representation[1], mask=torch_representation[2])
+        # there is a more efficient way to to this. check on this link: https://stackoverflow.com/questions/9619199/best-way-to-preserve-numpy-arrays-on-disk
+        np.savez(f'{processed_img_dir}{os.path.sep}{index}', query=torch_representation[0], target=torch_representation[1], mask=torch_representation[2])
         # return the triplet (Dq, Dt, Dm) where Dq is the query image, Dt is the target image and Dm is the mask image
         return torch_representation
 
@@ -104,7 +106,7 @@ class BasicDataset(Dataset):
         file_path = f'{self.processed_img_dir}{os.path.sep}{i}.npz'
         if os.path.exists(file_path):
             data = np.load(file_path, mmap_mode='r')
-            return_tuple = (data['target'], data['query'], data['mask'])
+            return_tuple = (data['query'], data['target'], data['mask'])
         else:
             return_tuple = (self.preprocess(i, self.ids[i], self.mask_image_dim, self.query_dim, self.processed_img_dir, self.mask_suffix))
         return return_tuple
