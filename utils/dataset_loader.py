@@ -14,7 +14,7 @@ from PIL import Image
 # TODO: Prendi la prima query image, la target image e la merged_mask
 class BasicDataset(Dataset):
     # TODO: Fai in modo che funzioni su più dataset. Non gli va scritto il path del singolo dataset ma deve prenderlo da solo
-    def __init__(self, imgs_dir, masks_dir, mask_image_dim=128, query_dim=64, mask_suffix='.bboxes.txt'):
+    def __init__(self, imgs_dir, masks_dir, mask_image_dim=256, query_dim=64, mask_suffix='.bboxes.txt'):
         self.imgs_dir = imgs_dir
         self.masks_dir = masks_dir
         self.processed_img_dir = str(imgs_dir[:imgs_dir.rindex(os.path.sep)]) + os.path.sep + "processed"
@@ -106,7 +106,7 @@ class BasicDataset(Dataset):
         file_path = f'{self.processed_img_dir}{os.path.sep}{i}.npz'
         if os.path.exists(file_path):
             data = np.load(file_path, mmap_mode='r')
-            return_tuple = (data['query'], data['target'], data['mask'])
+            return_tuple = np.array(data['query'], data['target'], data['mask'])
         else:
             return_tuple = (self.preprocess(i, self.ids[i], self.mask_image_dim, self.query_dim, self.processed_img_dir, self.mask_suffix))
         return return_tuple

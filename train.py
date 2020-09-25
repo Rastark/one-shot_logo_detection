@@ -7,12 +7,13 @@ import torch
 from torch import optim
 import torch.nn.functional as F
 
-from .model import LogoDetectionModel
-
+from .model.model import LogoDetectionModel
+from .utils.dataset_loader import BasicDataset
 
 # todo: when we add more models, we should move these variables to another location
 MODEL_HOME = os.path.abspath("./stored_models/")
 ALL_MODEL_NAMES = ["LogoDetectionModel"]
+ALL_DATASET_NAMES = ["FlickrLogos-32"]
 
 parser = argparse.ArgumentParser()
 
@@ -46,28 +47,22 @@ parser.add_argument('--valid',
                     help="Number of epochs before valid"
 )
 
-parser.add_argument('--embed_dim',
-                    default=400,
-                    type=int,
-                    help="Embedding dimension"
-)
-
 parser.add_argument('--batch_size',
-                    default=128,
+                    default=32,
                     type=int,
                     help="Number of samples in each mini-batch in SGD and Adam optimization"
 )
 
 parser.add_argument('--weight_decay',
-                    default=0,
+                    default=5e-4,
                     type=float,
-                    help="L2 Regularization weight"
+                    help="L2 weight regularization of the optimizer"
 )
 
 parser.add_argument('--learning_rate',
-                    default=1e-4,
+                    default=4e-4,
                     type=float,
-                    help="Learning rate"
+                    help="Learning rate of the optimizer"
 )
 
 parser.add_argument('--label_smooth',
@@ -79,13 +74,13 @@ parser.add_argument('--label_smooth',
 parser.add_argument('--decay1',
                     default=0.9,
                     type=float,
-                    help="Decay rate for the first moment estimate in Adam"
+                    help="Decay rate for the first momentum estimate in Adam"
 )
 
 parser.add_argument('--decay2',
                     default=0.999,
                     type=float,
-                    help="Decay rate for second moment estimate in Adam"
+                    help="Decay rate for second momentum estimate in Adam"
 )
 
 parser.add_argument('--verbose',
@@ -95,7 +90,22 @@ parser.add_argument('--verbose',
 )
 
 parser.add_argument('--load',
-                    help="Path to the model to load",
+                    type=bool,
+                    required=False,
+                    help="Path to the model to load"
+)
+
+parser.add_argument('--batch_norm',
+                    default=False,
+                    type=bool,
+                    required=False,
+                    help="If True, apply batch normalization",
+)
+
+parser.add_argument('--vgg-cfg',
+                    type=str,
+                    default='A',
+                    help="VGG architecture config",
                     required=False
 )
 
@@ -106,12 +116,14 @@ if args.load is not None:
     model_path = args.load
 
 print("Loading %s dataset..." % args.dataset)
-dataset = Dataset(name=args.dataset, separator="\t", load=True)
+imgs_dir = os.path.abspath("./data/dataset/FlickrLogos-v2/classes/jpg")
+masks_dir = os.path.abspath("./data/dataset/FlickrLogos-v2/classes/masks")
+dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir)
 
 print("Initializing model...")
 model = LogoDetectionModel(dataset=dataset,
-                           batch_norm=args.batch_norm
-                           cfg=args.cfg) 
+                           batch_norm=args.batch_norm,
+                           vgg_cfg=args.vgg-cfg) 
 model.to('cuda')
 if args.load is not None:
     model.load_state_dict(torch.load(model_path))
@@ -122,27 +134,37 @@ print("Training model...")
 # build all the supported optimizers using the passed params (learning rate and decays if Adam)
 supported_optimizers = {
     'Adam': optim.Adam(params=model.parameters(), lr=args.learning_rate, betas=(args.decay_adam_1, args.decay_adam_2), weight_decay=args.weight_decay),
-    'SGD': optim.SGD(params=.model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    'SGD': optim.SGD(params=model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
 }
 
-# choose which Torch Optimizer object to use, based on the passed name
+# Choose which Torch Optimizer object to use, based on the passed name
 optimizer = supported_optimizers[optimizer]
+
+
+# Apply Gaussian normalization to the model
+def weights_init(model):
+    if isinstance(model, nn.Module):
+        nn.init.normal_(model.weight.data, mean=0.0, std=0.01)
 
 
 def train(model,
           train_samples,
           valid_samples,
+          init_normal,
           batch_size,
           max_epochs,
           save_path,
           evaluate_every, 
           optimizer,
           label_smooth,
-          verbose)
+          verbose):
+
+    if(init_normal==True):
+        weights_init(model)
 
     for e in range(max_epochs):
-        self.model.train()
-        self.epoch(batch_size, train_samples)
+        model.train()
+        epoch(batch_size, train_samples)
 
         # # WIP
         # # Launches evaluation on the model every evaluate_every steps.
