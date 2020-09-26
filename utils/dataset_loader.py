@@ -1,9 +1,5 @@
-from os.path import splitext, dirname, abspath
-from os import listdir
 import os
 import numpy as np
-from glob import glob
-import torch
 from torch.utils.data import Dataset
 import logging
 from PIL import Image
@@ -32,12 +28,14 @@ class BasicDataset(Dataset):
             pass
 
         self.ids = []
-        # put in "ids" every not merged mask
+        # put in "ids" every merged mask
         for path, _, files in os.walk(masks_dir):
             for name in files:
-                if "png" in name and "merged" not in name:
+                _, file_extension = os.path.splitext(os.path.join(path, name))
+                if file_extension == ".png" and "merged" in name:
                     # TODO: Non salvare tutto il path ma solo "classe/file"
                     self.ids.append(os.path.join(path, name))
+        # print(self.ids)
         # print(len(self.ids))
         # Old version
         # self.ids = [splitext(file)[0] for file in listdir(imgs_dir)
@@ -54,8 +52,6 @@ class BasicDataset(Dataset):
     # TODO: Correggere il problema relativo alla classe HP (la cartella in "jpg" è in uppercase mentre in "masks" è in lowercase)
     @classmethod
     def preprocess(cls, index, mask, dim_img, dim_mask, processed_img_dir, mask_suffix):
-        # the number in the filename is the line+1 in the boundingbox file
-        number_line_bbox_file = int(mask.split(".")[-2])
         # switch between "jpg" and "masks" directory
         # TODO: Modifica sta parte che è orribile, potrebbe fare casini
         jpg_path = mask.replace("/masks/", "/jpg/")
@@ -75,13 +71,16 @@ class BasicDataset(Dataset):
         percentage_height = round(100 * int(resized_height_target_image) / (int(original_height_target_image)), 2) / 100
 
         # open the bounding box file
-        with open(f'{mask[:mask.rindex(".mask")]}{mask_suffix}') as bbox_file:
+        bounding_box_file_path = f'{mask[:mask.rindex(".mask")]}{mask_suffix}'
+        with open(bounding_box_file_path) as bbox_file:
             # get the corresponding row in the bbox file
             bbox_lines = bbox_file.readlines()
-            bbox_line_splitted = bbox_lines[number_line_bbox_file + 1].split(' ')
-            # check if we correctly skipped the first line of the file, the one with no number
-            if bbox_line_splitted[0].isnumeric():
-                x, y, width, height = bbox_line_splitted
+            first_line_bbox_splitted = bbox_lines[1].split(' ')
+            # check if we correctly skipped the first line of the file, the one with no number,
+            # and if all the elements are numeric, like every coordinate should be ;)
+            if first_line_bbox_splitted[0].isnumeric() and first_line_bbox_splitted[1].isnumeric() and \
+                    first_line_bbox_splitted[2].isnumeric() and first_line_bbox_splitted[3].rstrip().isnumeric():
+                x, y, width, height = first_line_bbox_splitted
                 # adapt the old coordinates to the new dimension
                 left = int(x.strip()) * percentage_width
                 upper = int(y.strip()) * percentage_height
@@ -90,6 +89,10 @@ class BasicDataset(Dataset):
                 # crop and resize the query image
                 pil_query_image = pil_resized_target_image.crop((left, upper, right, lower))
                 pil_resized_query_image = pil_query_image.resize((dim_mask, dim_mask))
+            else:
+                # TODO: nel traceback compare "error_string" e poi successivamente spiega l'eccezione. Trova un modo per togliere quel "error_string"
+                error_string = f'Bounding box file\'s first line should have 4 groups of integers with whitespace separator. Check {bounding_box_file_path}'
+                raise Exception(error_string)
 
         # Mask
         pil_mask = Image.open(mask)
