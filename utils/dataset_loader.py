@@ -54,8 +54,9 @@ class BasicDataset(Dataset):
         # put stuff into self.ids
         for target_images_paths, _, target_images_files in os.walk(self.imgs_dir):
             for target_image_name in target_images_files:
-                _, target_image_extension = os.path.splitext(os.path.join(target_images_paths, target_image_name))
-                if target_image_extension == ".jpg":
+                target_image_root_path, target_image_extension = os.path.splitext(
+                    os.path.join(target_images_paths, target_image_name))
+                if target_image_extension == ".jpg" and "no-logo" not in target_image_root_path:
                     # TODO: Non salvare tutto il path ma solo "classe/file"
                     self.ids[index] = {"target_image_path": os.path.join(target_images_paths, target_image_name),
                                        "mask_image_path": masks_dict[target_image_name],
@@ -76,7 +77,7 @@ class BasicDataset(Dataset):
     # stretch the target image
     # stretch, crop and stretch again the query image
     # stretch the mask image
-    def preprocess(self, index: int, files_path: dict) -> List[List]:
+    def preprocess(self, index: int, files_path: dict) -> np.ndarray:
 
         # extract paths from files_path
         target_image_path = files_path["target_image_path"]
