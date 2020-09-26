@@ -2,7 +2,6 @@ import os
 import numpy as np
 from torch.utils.data import Dataset
 import logging
-from typing import List
 from PIL import Image
 
 
@@ -118,7 +117,7 @@ class BasicDataset(Dataset):
                 pil_resized_query_image = pil_query_image.resize((self.query_dim, self.query_dim))
             else:
                 # TODO: nel traceback compare "error_string" e poi successivamente spiega l'eccezione. Trova un modo per togliere quel "error_string"
-                error_string = f'Bounding box file\'s first line should have 4 groups of integers with whitespace separator. Check {bounding_box_file_path}'
+                error_string = f'Bounding box file\'s first line should have 4 groups of integers with whitespace separator. Check {bbox_path}'
                 raise Exception(error_string)
 
         # Mask
