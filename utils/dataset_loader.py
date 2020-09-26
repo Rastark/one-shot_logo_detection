@@ -6,8 +6,6 @@ from PIL import Image
 
 
 # TODO: Ha da funzionà co TorchVision, se hai tempo
-# TODO: Prendi una query per ogni immagine e usala come query image per l'immagine. Modificata con il TODO successivo
-# TODO: Prendi la prima query image, la target image e la merged_mask
 class BasicDataset(Dataset):
     # TODO: Fai in modo che funzioni su più dataset. Non gli va scritto il path del singolo dataset ma deve prenderlo da solo
     def __init__(self, imgs_dir, masks_dir, mask_image_dim=256, query_dim=64, mask_suffix='.bboxes.txt'):
