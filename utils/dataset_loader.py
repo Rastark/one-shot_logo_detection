@@ -95,20 +95,23 @@ class BasicDataset(Dataset):
         pil_mask = Image.open(mask)
         pil_resized_mask = pil_mask.resize((dim_img, dim_img))
 
-        torch_representation = (to_pytorch(pil_resized_query_image), to_pytorch(pil_resized_target_image), to_pytorch(pil_resized_mask))
+        triplet_array_in_torch_representation = np.array(
+            [to_pytorch(pil_resized_query_image), to_pytorch(pil_resized_target_image), to_pytorch(pil_resized_mask)])
         # save the file so the next time you don't have to preprocess again
-        # there is a more efficient way to to this. check on this link: https://stackoverflow.com/questions/9619199/best-way-to-preserve-numpy-arrays-on-disk
-        np.savez(f'{processed_img_dir}{os.path.sep}{index}', query=torch_representation[0], target=torch_representation[1], mask=torch_representation[2])
+        # TODO: C'è un modo più efficiente per falro, guarda qua: https://stackoverflow.com/questions/9619199/best-way-to-preserve-numpy-arrays-on-disk
+        np.savez(f'{processed_img_dir}{os.path.sep}{index}', query=triplet_array_in_torch_representation[0],
+                 target=triplet_array_in_torch_representation[1], mask=triplet_array_in_torch_representation[2])
         # return the triplet (Dq, Dt, Dm) where Dq is the query image, Dt is the target image and Dm is the mask image
-        return torch_representation
+        return triplet_array_in_torch_representation
 
     def __getitem__(self, i):
         file_path = f'{self.processed_img_dir}{os.path.sep}{i}.npz'
         if os.path.exists(file_path):
             data = np.load(file_path, mmap_mode='r')
-            return_tuple = np.array(data['query'], data['target'], data['mask'])
+            return_tuple = np.array([data['query'], data['target'], data['mask']])
         else:
-            return_tuple = (self.preprocess(i, self.ids[i], self.mask_image_dim, self.query_dim, self.processed_img_dir, self.mask_suffix))
+            return_tuple = self.preprocess(i, self.ids[i], self.mask_image_dim, self.query_dim, self.processed_img_dir,
+                                           self.mask_suffix)
         return return_tuple
 
     # Old version
@@ -153,7 +156,6 @@ class BasicDataset(Dataset):
     #         'image': torch.from_numpy(img).type(torch.FloatTensor),
     #         'mask': torch.from_numpy(mask).type(torch.FloatTensor)
     #     }
-
 
 
 class CarvanaBasicDataset(BasicDataset):
