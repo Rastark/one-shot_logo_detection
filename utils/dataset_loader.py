@@ -125,7 +125,7 @@ class BasicDataset(Dataset):
         pil_mask = Image.open(mask_image_path)
         pil_resized_mask = pil_mask.resize((self.mask_image_dim, self.mask_image_dim))
 
-        # just to test if everything works. don't look at those :)
+        # just to test if everything works. don't look at these :)
         # pil_resized_target_image.save(f'{index}_target.jpg')
         # pil_resized_query_image.save(f'{index}_query.jpg')
         # pil_resized_mask.save(f'{index}_mask.jpg')
