@@ -5,17 +5,24 @@ import logging
 from PIL import Image
 
 
+# TODO: Deve preprocessare anche le immagini di test
 # TODO: Ha da funzionà co TorchVision, se hai tempo
 class BasicDataset(Dataset):
     def __init__(self, imgs_dir: str, masks_dir: str, mask_image_dim=256, query_dim=64, mask_suffix='.bboxes.txt'):
         self.imgs_dir = imgs_dir
         self.masks_dir = masks_dir
-        self.processed_img_dir = str(imgs_dir[:imgs_dir.rindex(os.path.sep)]) + os.path.sep + "processed"
+        self.processed_img_dir = str(imgs_dir[:imgs_dir.rindex(os.path.sep) + 1]) + "processed"
         self.mask_image_dim = mask_image_dim
         self.query_dim = query_dim
         self.mask_suffix = mask_suffix
         assert mask_image_dim > 1, 'The dimension of mask and image must be higher than 1'
         assert query_dim > 1, 'The dimension of query image must be higher than 1'
+
+        if not os.path.isdir(imgs_dir):
+            raise Exception("Bad path for images directory")
+
+        if not os.path.isdir(masks_dir):
+            raise Exception("Bad path for masks directory")
 
         # create processed image's directory, if not exists yet
         try:
