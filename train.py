@@ -138,7 +138,7 @@ supported_optimizers = {
 }
 
 # Choose which Torch Optimizer object to use, based on the passed name
-optimizer = supported_optimizers[optimizer]
+optimizer = supported_optimizers[args.optimizer]
 
 
 # Apply Gaussian normalization to the model
@@ -209,7 +209,7 @@ def train(model,
 
                 batch_start += self.batch_size
                 bar.update(batch.shape[0])
-                bar.set_postfix(loss=f'{l.item():.5f}')1
+                bar.set_postfix(loss=f'{l.item():.5f}')
 
     # Computing the loss over a single batch
     def step_on_batch(self, loss, batch):
@@ -238,100 +238,100 @@ print("\tTest Mean Reciprocal Rank: %f" % mrr)
 
 
 
-class Optimizer:
+# class Optimizer:
 
-    def __init__(self,
-        model: LogoDetectionModel,
-        optimizer: str = "SGD",
-        batch_size: int = 32,
-        learning_rate: float = 1e-4,
-        adam_decay_1: float = 0.9,
-        adam_decay_2: float = 0.99,
-        weight_decay: float = 0.0,      # L2 regularization
-        label_smooth: float = 0.1,      # If we want to implement label smoothing (?)
-        verbose: bool = True):
+#     def __init__(self,
+#         model: LogoDetectionModel,
+#         optimizer: str = "SGD",
+#         batch_size: int = 32,
+#         learning_rate: float = 1e-4,
+#         adam_decay_1: float = 0.9,
+#         adam_decay_2: float = 0.99,
+#         weight_decay: float = 0.0,      # L2 regularization
+#         label_smooth: float = 0.1,      # If we want to implement label smoothing (?)
+#         verbose: bool = True):
 
-    self.model = model
-    self.batch_size = batch_size
-    self.label_smooth = label_smooth
-    self.verbose = verbose
+#         self.model = model
+#         self.batch_size = batch_size
+#         self.label_smooth = label_smooth
+#         self.verbose = verbose
 
 
-    # Evaluator selection
+#     # Evaluator selection
 
-    def train(self,
-        train_samples,
-        max_epochs: int,
-        save_path: str = None,
-        evaluate_every: int = -1,
-        valid_samples = None)
+#     def train(self,
+#         train_samples,
+#         max_epochs: int,
+#         save_path: str = None,
+#         evaluate_every: int = -1,
+#         valid_samples = None)
 
-    for e in range(max_epochs):
-        self.model.train()
-        self.epoch(batch_size, train_samples)
+#     for e in range(max_epochs):
+#         self.model.train()
+#         self.epoch(batch_size, train_samples)
 
-        # WIP
-        # Launches evaluation on the model every evaluate_every steps.
-        # We need to change to appropriate evaluation metrics.
-        if evaluate_every > 0 and valid_samples is not None and (e + 1) % evaluate_every == 0:
-            self.model.eval()
-            with torch.no_grad():
-                mrr, h1 = self.evaluator.eval(samples=valid_samples, write_output= False) 
+#         # WIP
+#         # Launches evaluation on the model every evaluate_every steps.
+#         # We need to change to appropriate evaluation metrics.
+#         if evaluate_every > 0 and valid_samples is not None and (e + 1) % evaluate_every == 0:
+#             self.model.eval()
+#             with torch.no_grad():
+#                 mrr, h1 = self.evaluator.eval(samples=valid_samples, write_output= False) 
             
-            # Metrics printing
-            print("\tValidation: %f" % h1)
+#             # Metrics printing
+#             print("\tValidation: %f" % h1)
             
-        if save_path is not None:
-            print("\tSaving model...")
-            torch.save(self.model.state_dict(), save_path)
-        print("\tDone.")
+#         if save_path is not None:
+#             print("\tSaving model...")
+#             torch.save(self.model.state_dict(), save_path)
+#         print("\tDone.")
 
-    def epoch(self,
-        batch_size: int,
-        train_samples: np.array):
+#     def epoch(self,
+#         batch_size: int,
+#         train_samples: np.array):
 
-        n_samples = train_samples.shape[0]
+#         n_samples = train_samples.shape[0]
 
-        # Moving samples to GPU and random shuffling them
-        train_samples = torch.from_numpy(train_samples).cuda()
-        randomized_samples = train_samples[torch.randperm(n_samples), :]
+#         # Moving samples to GPU and random shuffling them
+#         train_samples = torch.from_numpy(train_samples).cuda()
+#         randomized_samples = train_samples[torch.randperm(n_samples), :]
 
-        loss = torch.nn.BCELoss()
+#         loss = torch.nn.BCELoss()
 
-        # Training over batches
+#         # Training over batches
 
-        # Progress bar
-        with tqdm.tqdm(total=n_samples, unit="ex", disable=not self.verbose) as bar:
-            bar.set_description(f'train loss')
+#         # Progress bar
+#         with tqdm.tqdm(total=n_samples, unit="ex", disable=not self.verbose) as bar:
+#             bar.set_description(f'train loss')
 
-            batch_start = 0
-            while batch_start < n_samples:
-                batch_end = min(batch_start + batch_size, n_samples)
-                batch = randomized_samples[batch]
+#             batch_start = 0
+#             while batch_start < n_samples:
+#                 batch_end = min(batch_start + batch_size, n_samples)
+#                 batch = randomized_samples[batch]
 
-                l = self.step_on_batch(loss, batch)
+#                 l = self.step_on_batch(loss, batch)
 
-                batch_start += self.batch_size
-                bar.update(batch.shape[0])
-                bar.set_postfix(loss=f'{l.item():.5f}')
+#                 batch_start += self.batch_size
+#                 bar.update(batch.shape[0])
+#                 bar.set_postfix(loss=f'{l.item():.5f}')
 
-    # Computing the loss over a single batch
-    def step_on_batch(self, loss, batch):
-        prediction = self.model.forward(batch)
-        truth = batch[:, 2]
+#     # Computing the loss over a single batch
+#     def step_on_batch(self, loss, batch):
+#         prediction = self.model.forward(batch)
+#         truth = batch[:, 2]
 
-        # # Label smoothing (?)
-        # truth = (1.0 - self.label_smooth)*truth + (1.0 / truth.shape[1])
+#         # # Label smoothing (?)
+#         # truth = (1.0 - self.label_smooth)*truth + (1.0 / truth.shape[1])
         
-        # Compute loss
-        l = loss(prediction, truth)
+#         # Compute loss
+#         l = loss(prediction, truth)
 
-        # Compute loss gradients and run optimization step
-        self.optimizer.zero_grad()
-        l.backward()
-        self.optmizer.step()
+#         # Compute loss gradients and run optimization step
+#         self.optimizer.zero_grad()
+#         l.backward()
+#         self.optmizer.step()
 
-        #return loss
-        return l
+#         #return loss
+#         return l
         
 
