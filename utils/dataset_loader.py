@@ -12,7 +12,7 @@ class BasicDataset(Dataset):
         self.imgs_dir = imgs_dir
         self.masks_dir = masks_dir
         self.processed_img_dir = str(imgs_dir[:imgs_dir.rindex(os.path.sep) + 1]) + "processed"
-        self.mask_image_dim = mask_image_dim
+        self.mask_img_dim = mask_image_dim
         self.query_dim = query_dim
         self.mask_suffix = mask_suffix
         assert mask_image_dim > 1, 'The dimension of mask and image must be higher than 1'
@@ -94,7 +94,7 @@ class BasicDataset(Dataset):
 
         pil_target_image = Image.open(target_image_path)
         # stretch the image
-        pil_resized_target_image = pil_target_image.resize((self.mask_image_dim, self.mask_image_dim))
+        pil_resized_target_image = pil_target_image.resize((self.mask_img_dim, self.mask_img_dim))
 
         # Query image
 
@@ -130,7 +130,7 @@ class BasicDataset(Dataset):
         # Mask
 
         pil_mask = Image.open(mask_image_path)
-        pil_resized_mask = pil_mask.resize((self.mask_image_dim, self.mask_image_dim))
+        pil_resized_mask = pil_mask.resize((self.mask_img_dim, self.mask_img_dim))
 
         # just to test if everything works. don't look at these :)
         # pil_resized_target_image.save(f'{index}_target.jpg')
