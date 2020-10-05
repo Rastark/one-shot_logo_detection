@@ -123,7 +123,7 @@ dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir)
 print("Initializing model...")
 model = LogoDetectionModel(dataset=dataset,
                            batch_norm=args.batch_norm,
-                           vgg_cfg=args.vgg-cfg) 
+                           vgg_cfg=args.vgg_cfg) 
 model.to('cuda')
 if args.load is not None:
     model.load_state_dict(torch.load(model_path))
