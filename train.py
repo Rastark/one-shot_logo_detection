@@ -1,10 +1,14 @@
 import argparse
+import logging
 import os
 import tqdm
+
 import numpy as np
 import torch
 from torch import optim
 from torch.utils.data import DataLoader, random_split
+from torch.utils.tensorboard import SummaryWriter
+import torch.nn as nn
 import torch.nn.functional as F
 
 from .model.model import LogoDetectionModel
@@ -29,7 +33,7 @@ print("Initializing model...")
 model = LogoDetectionModel(dataset=dataset,
                            batch_norm=args.batch_norm,
                            vgg_cfg=args.vgg_cfg)
-model.to('cuda')
+model.to('cuda')    # ???
 if args.load is not None:
     model.load_state_dict(torch.load(model_path))
 
@@ -66,24 +70,74 @@ def train(model,
           val_percent=0.1):
     # if (init_normal == True):
     #     weights_init(model)
+
     dataset = BasicDataset(imgs_dir, masks_dir)
+    
+    # Splitting dataset
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
+
+    # Loading dataset
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
     val_loader = DataLoader(val, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
 
+    # Logging for TensorBoard
+    writer = SummaryWriter(comment=f'LR_{optimizer.lr}_BS_{batch_size}_OPT_{optimizer.class}')  # does optimizer.lr work?
+    global_step = 0
 
-    for e in range(max_epochs):
-        model.train()
-        epoch_loss = 0
+    logging.info(f'''Starting training:
+        Epochs:             {max_epochs}
+        Batch size:         {batch_size}
+        Learning rate:      {optimizer.lr}
+        Training size:      {n_train}
+        Validation size:    {n_val}
+        Device:             {device.type}
+    ''')
+
+    criterion = nn.BCELoss() / (256*256)        # L = (1/(H*W)) * BCELoss
+
+    for epoch in range(max_epochs):
+        model.train()   # set the model in training flag to True
+        epoch_loss = 0  # resets the loss for the current epoch
         # epoch(batch_size, train_samples)
 
         # TODO
-        for batch in train_loader:
-            queries = batch[:, 0]       # Correct dimensions?
-            targets = batch[:, 1]
-            true_masks = batch[:, 2]
+        with tqdm.tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{max_epochs}', unit="img") as bar:
+            bar.set_description(f'train loss')
+
+            for batch in train_loader:
+                queries = batch[:, 0]       # Correct dimensions?
+                targets = batch[:, 1]
+                true_masks = batch[:, 2]
+
+                queries = queries.to(device=device, dtype=torch.float32)
+                targets = targets.to(device=device, dtype=torch.float32)
+                true_masks = true_masks.to(device=device, dtype=torch.float32)
+
+                masks_pred = model(queries, targets)
+                loss = criterion(masks_pred, true_masks)
+                epoch_loss += loss.item()
+
+                # TensorBoard logging
+                writer.add_scalar('Loss/train', loss.item(), global_step)
+
+                bar.set_postfix(loss=f'{loss.item():.5f}')
+
+                optimizer.zero_grad()
+                loss.backward()
+                # nn.utils.clip_grad_value_(net.parameters(), 0.1) Gradient Clipping
+                optimizer.step()
+
+                bar.update(queries.shape[0])
+                global_step += 1
+                if global_step % (n_train // (10 * batch_size)) == 0:
+                    for tag, value in model.named_parameters():
+                        tag = tag.replace('.', '/')
+                        writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
+                        writer.add_histogram('grads/' + tag, value.grad.cpu().numpy(), global_step)
+                    # TODO Eval
+                    writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
         # # WIP
         # # Launches evaluation on the model every evaluate_every steps.
@@ -100,55 +154,6 @@ def train(model,
         #     print("\tSaving model...")
         #     torch.save(self.model.state_dict(), save_path)
         # print("\tDone.")
-
-    def epoch(self,
-              batch_size: int,
-              train_samples: np.array):
-        
-        n_samples = train_samples.shape[0]
-
-        # Moving samples to GPU and random shuffling them
-        train_samples = torch.from_numpy(train_samples).cuda()
-        randomized_samples = train_samples[torch.randperm(n_samples), :]
-
-        loss = torch.nn.BCELoss() * (1 / 256 * 256)
-
-        # Training over batches
-
-        # Progress bar
-        with tqdm.tqdm(total=n_samples, unit="ex", disable=not self.verbose) as bar:
-            bar.set_description(f'train loss')
-
-            batch_start = 0
-            while batch_start < n_samples:
-                batch_end = min(batch_start + batch_size, n_samples)
-                batch = randomized_samples[batch]
-
-                l = self.step_on_batch(loss, batch)
-
-                batch_start += self.batch_size
-                bar.update(batch.shape[0])
-                bar.set_postfix(loss=f'{l.item():.5f}')
-
-    # Computing the loss over a single batch
-    def step_on_batch(self, loss, batch):
-        prediction = self.model.forward(batch)
-        truth = batch[:, 3]
-
-        # # Label smoothing (?)
-        # truth = (1.0 - self.label_smooth)*truth + (1.0 / truth.shape[1])
-
-        # Compute loss
-        l = loss(prediction, truth)
-
-        # Compute loss gradients and run optimization step
-        self.optimizer.zero_grad()
-        l.backward()
-        self.optmizer.step()
-
-        # return loss
-        return l
-
 
 print("\nEvaluating model...")
 model.eval()
@@ -258,99 +263,3 @@ def get_args():
 if __name__ == '__main__':
     args = get_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-# class Optimizer:
-
-#     def __init__(self,
-#         model: LogoDetectionModel,
-#         optimizer: str = "SGD",
-#         batch_size: int = 32,
-#         learning_rate: float = 1e-4,
-#         adam_decay_1: float = 0.9,
-#         adam_decay_2: float = 0.99,
-#         weight_decay: float = 0.0,      # L2 regularization
-#         label_smooth: float = 0.1,      # If we want to implement label smoothing (?)
-#         verbose: bool = True):
-
-#         self.model = model
-#         self.batch_size = batch_size
-#         self.label_smooth = label_smooth
-#         self.verbose = verbose
-
-
-#     # Evaluator selection
-
-#     def train(self,
-#         train_samples,
-#         max_epochs: int,
-#         save_path: str = None,
-#         evaluate_every: int = -1,
-#         valid_samples = None)
-
-#     for e in range(max_epochs):
-#         self.model.train()
-#         self.epoch(batch_size, train_samples)
-
-#         # WIP
-#         # Launches evaluation on the model every evaluate_every steps.
-#         # We need to change to appropriate evaluation metrics.
-#         if evaluate_every > 0 and valid_samples is not None and (e + 1) % evaluate_every == 0:
-#             self.model.eval()
-#             with torch.no_grad():
-#                 mrr, h1 = self.evaluator.eval(samples=valid_samples, write_output= False) 
-
-#             # Metrics printing
-#             print("\tValidation: %f" % h1)
-
-#         if save_path is not None:
-#             print("\tSaving model...")
-#             torch.save(self.model.state_dict(), save_path)
-#         print("\tDone.")
-
-#     def epoch(self,
-#         batch_size: int,
-#         train_samples: np.array):
-
-#         n_samples = train_samples.shape[0]
-
-#         # Moving samples to GPU and random shuffling them
-#         train_samples = torch.from_numpy(train_samples).cuda()
-#         randomized_samples = train_samples[torch.randperm(n_samples), :]
-
-#         loss = torch.nn.BCELoss()
-
-#         # Training over batches
-
-#         # Progress bar
-#         with tqdm.tqdm(total=n_samples, unit="ex", disable=not self.verbose) as bar:
-#             bar.set_description(f'train loss')
-
-#             batch_start = 0
-#             while batch_start < n_samples:
-#                 batch_end = min(batch_start + batch_size, n_samples)
-#                 batch = randomized_samples[batch]
-
-#                 l = self.step_on_batch(loss, batch)
-
-#                 batch_start += self.batch_size
-#                 bar.update(batch.shape[0])
-#                 bar.set_postfix(loss=f'{l.item():.5f}')
-
-#     # Computing the loss over a single batch
-#     def step_on_batch(self, loss, batch):
-#         prediction = self.model.forward(batch)
-#         truth = batch[:, 2]
-
-#         # # Label smoothing (?)
-#         # truth = (1.0 - self.label_smooth)*truth + (1.0 / truth.shape[1])
-
-#         # Compute loss
-#         l = loss(prediction, truth)
-
-#         # Compute loss gradients and run optimization step
-#         self.optimizer.zero_grad()
-#         l.backward()
-#         self.optmizer.step()
-
-#         #return loss
-#         return l
