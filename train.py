@@ -4,6 +4,7 @@ import tqdm
 import numpy as np
 import torch
 from torch import optim
+from torch.utils.data import DataLoader, random_split
 import torch.nn.functional as F
 
 from .model.model import LogoDetectionModel
@@ -14,101 +15,6 @@ MODEL_HOME = os.path.abspath("./stored_models/")
 ALL_MODEL_NAMES = ["LogoDetectionModel"]
 ALL_DATASET_NAMES = ["FlickrLogos-32"]
 
-parser = argparse.ArgumentParser()
-
-parser.add_argument('--dataset',
-                    choices=ALL_DATASET_NAMES,
-                    help="Dataset in {}".format(ALL_DATASET_NAMES),
-                    required=True
-                    )
-
-parser.add_argument('--model',
-                    choices=ALL_MODEL_NAMES,
-                    help="Model in {}".format(ALL_MODEL_NAMES)
-                    )
-
-optimizers = ['Adam', 'SGD']
-parser.add_argument('--optimizer',
-                    choices=optimizers,
-                    default='Adam',
-                    help="Optimizer in {}".format(optimizers)
-                    )
-
-parser.add_argument('--max_epochs',
-                    default=500,
-                    type=int,
-                    help="Number of epochs"
-                    )
-
-parser.add_argument('--valid',
-                    default=-1,
-                    type=float,
-                    help="Number of epochs before valid"
-                    )
-
-parser.add_argument('--batch_size',
-                    default=32,
-                    type=int,
-                    help="Number of samples in each mini-batch in SGD and Adam optimization"
-                    )
-
-parser.add_argument('--weight_decay',
-                    default=5e-4,
-                    type=float,
-                    help="L2 weight regularization of the optimizer"
-                    )
-
-parser.add_argument('--learning_rate',
-                    default=4e-4,
-                    type=float,
-                    help="Learning rate of the optimizer"
-                    )
-
-parser.add_argument('--label_smooth',
-                    default=0.1,
-                    type=float,
-                    help="Label smoothing for true labels"
-                    )
-
-parser.add_argument('--decay1',
-                    default=0.9,
-                    type=float,
-                    help="Decay rate for the first momentum estimate in Adam"
-                    )
-
-parser.add_argument('--decay2',
-                    default=0.999,
-                    type=float,
-                    help="Decay rate for second momentum estimate in Adam"
-                    )
-
-parser.add_argument('--verbose',
-                    default=True,
-                    type=bool,
-                    help="Verbose"
-                    )
-
-parser.add_argument('--load',
-                    type=bool,
-                    required=False,
-                    help="Path to the model to load"
-                    )
-
-parser.add_argument('--batch_norm',
-                    default=False,
-                    type=bool,
-                    required=False,
-                    help="If True, apply batch normalization",
-                    )
-
-parser.add_argument('--vgg-cfg',
-                    type=str,
-                    default='A',
-                    help="VGG architecture config",
-                    required=False
-                    )
-
-args = parser.parse_args()
 
 model_path = "./stored_models/" + "_".join(["LogoDetection", args.dataset]) + ".pt"
 if args.load is not None:
@@ -141,29 +47,43 @@ supported_optimizers = {
 optimizer = supported_optimizers[args.optimizer]
 
 
-# Apply Gaussian normalization to the model
-def weights_init(model):
-    if isinstance(model, nn.Module):
-        nn.init.normal_(model.weight.data, mean=0.0, std=0.01)
+# # Apply Gaussian normalization to the model
+# def weights_init(model):
+#     if isinstance(model, nn.Module):
+#         nn.init.normal_(model.weight.data, mean=0.0, std=0.01)
 
 
 def train(model,
-          train_samples,
-          valid_samples,
-          init_normal,
+          device,
+        #   init_normal,
           batch_size,
           max_epochs,
           save_path,
           evaluate_every,
           optimizer,
           label_smooth,
-          verbose):
-    if (init_normal == True):
-        weights_init(model)
+          verbose,
+          val_percent=0.1):
+    # if (init_normal == True):
+    #     weights_init(model)
+    dataset = BasicDataset(imgs_dir, masks_dir)
+    n_val = int(len(dataset) * val_percent)
+    n_train = len(dataset) - n_val
+    train, val = random_split(dataset, [n_train, n_val])
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    val_loader = DataLoader(val, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
+
 
     for e in range(max_epochs):
         model.train()
-        epoch(batch_size, train_samples)
+        epoch_loss = 0
+        # epoch(batch_size, train_samples)
+
+        # TODO
+        for batch in train_loader:
+            queries = batch[:, 0]       # Correct dimensions?
+            targets = batch[:, 1]
+            true_masks = batch[:, 2]
 
         # # WIP
         # # Launches evaluation on the model every evaluate_every steps.
@@ -184,7 +104,7 @@ def train(model,
     def epoch(self,
               batch_size: int,
               train_samples: np.array):
-
+        
         n_samples = train_samples.shape[0]
 
         # Moving samples to GPU and random shuffling them
@@ -235,6 +155,109 @@ model.eval()
 mrr, h1 = Evaluator(model=model).eval(samples=dataset.test_samples, write_output=False)
 print("\tTest Hits@1: %f" % h1)
 print("\tTest Mean Reciprocal Rank: %f" % mrr)
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset',
+                        choices=ALL_DATASET_NAMES,
+                        help="Dataset in {}".format(ALL_DATASET_NAMES),
+                        required=True
+                        )
+
+    parser.add_argument('--model',
+                        choices=ALL_MODEL_NAMES,
+                        help="Model in {}".format(ALL_MODEL_NAMES)
+                        )
+
+    optimizers = ['Adam', 'SGD']
+    parser.add_argument('--optimizer',
+                        choices=optimizers,
+                        default='Adam',
+                        help="Optimizer in {}".format(optimizers)
+                        )
+
+    parser.add_argument('--max_epochs',
+                        default=500,
+                        type=int,
+                        help="Number of epochs"
+                        )
+
+    parser.add_argument('--valid',
+                        default=-1,
+                        type=float,
+                        help="Number of epochs before valid"
+                        )
+
+    parser.add_argument('--batch_size',
+                        default=32,
+                        type=int,
+                        help="Number of samples in each mini-batch in SGD and Adam optimization"
+                        )
+
+    parser.add_argument('--weight_decay',
+                        default=5e-4,
+                        type=float,
+                        help="L2 weight regularization of the optimizer"
+                        )
+
+    parser.add_argument('--learning_rate',
+                        default=4e-4,
+                        type=float,
+                        help="Learning rate of the optimizer"
+                        )
+
+    parser.add_argument('--label_smooth',
+                        default=0.1,
+                        type=float,
+                        help="Label smoothing for true labels"
+                        )
+
+    parser.add_argument('--decay1',
+                        default=0.9,
+                        type=float,
+                        help="Decay rate for the first momentum estimate in Adam"
+                        )
+
+    parser.add_argument('--decay2',
+                        default=0.999,
+                        type=float,
+                        help="Decay rate for second momentum estimate in Adam"
+                        )
+
+    parser.add_argument('--verbose',
+                        default=True,
+                        type=bool,
+                        help="Verbose"
+                        )
+
+    parser.add_argument('--load',
+                        type=bool,
+                        required=False,
+                        help="Path to the model to load"
+                        )
+
+    parser.add_argument('--batch_norm',
+                        default=False,
+                        type=bool,
+                        required=False,
+                        help="If True, apply batch normalization",
+                        )
+
+    parser.add_argument('--vgg-cfg',
+                        type=str,
+                        default='A',
+                        help="VGG architecture config",
+                        required=False
+                        )
+
+    return parser.parse_args()
+
+
+
+if __name__ == '__main__':
+    args = get_args()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # class Optimizer:
 

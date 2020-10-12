@@ -45,9 +45,9 @@ class LogoDetectionModel(nn.Module):
         # with torch.no_grad():
         #     self.input_layer.weight = torch.nn.Parameter()
 
-    def forward(self, samples):
-        query = samples[:, 0]
-        target = samples[:, 1]
+    def forward(self, query, target):
+        # query = samples[:, 0]
+        # target = samples[:, 1]
         z = self.latent_repr(query)
 
         # Encoder + Conditioning
