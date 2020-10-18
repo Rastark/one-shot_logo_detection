@@ -125,7 +125,7 @@ class BasicDataset(Dataset):
     # stretch, crop and stretch again the query image
     # stretch the mask image
     # TODO: Deve tornare una lista o un ndarray?
-    def preprocess(self, index: int, files_path: dict) -> object:
+    def preprocess(self, index: int, files_path: dict) -> np.ndarray:
         # extract paths from files_path
         target_image_path = files_path[self.TARGET_IMAGE_PATH]
         mask_image_path = files_path[self.MASK_IMAGE_PATH]
@@ -243,21 +243,11 @@ class BasicDataset(Dataset):
     # dude, the name says all. just read it :/
     def create_triplet_without_torch_representation(self, pil_query, pil_target, pil_mask):
         # return [np.array(pil_query), np.array(pil_target), np.array(pil_mask)]
-        # return np.array([np.array(pil_query), np.array(pil_target), np.array(pil_mask)])
-        return {
-            "query": np.array(pil_query),
-            "target": np.array(pil_target),
-            "mask": np.array(pil_mask)
-        }
+        return np.array([np.array(pil_query), np.array(pil_target), np.array(pil_mask)])
 
     def create_triplet_with_torch_representation(self, pil_query, pil_target, pil_mask):
         # return [to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)]
-        # return np.array([to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)])
-        return {
-            "query": to_pytorch(pil_query),
-            "target": to_pytorch(pil_target),
-            "mask": to_pytorch(pil_mask)
-        }
+        return np.array([to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)])
 
     # def h5py_with_pytorch(self, pil_img, index, type):
     #     x = self.h5py_compression(to_pytorch(pil_img), index, type)
@@ -279,19 +269,12 @@ class BasicDataset(Dataset):
         image_type = ["query", "target", "mask"]
         image_type_index = 0
         for image in images:
-            file_name = f'{self.processed_img_dir}{os.path.sep}{image_index}_{image}.hdf5'
+            file_name = f'{self.processed_img_dir}{os.path.sep}{image_index}_{image_type[image_type_index]}.hdf5'
             f = h5py.File(file_name, "w")
             # TODO: Esistono altri algoritmi di compressione come Mafisc. Una roba figa che puoi usare è Bitshuffle
-            f.create_dataset("init", compression="gzip", compression_opts=9, data=images[image])
+            f.create_dataset("init", compression="gzip", compression_opts=9, data=image)
             f.close()
             image_type_index += 1
-        # for image in images:
-        #     file_name = f'{self.processed_img_dir}{os.path.sep}{image_index}_{image_type[image_type_index]}.hdf5'
-        #     f = h5py.File(file_name, "w")
-        #     # TODO: Esistono altri algoritmi di compressione come Mafisc. Una roba figa che puoi usare è Bitshuffle
-        #     f.create_dataset("init", compression="gzip", compression_opts=9, data=image)
-        #     f.close()
-        #     image_type_index += 1
         # return file_name
 
     # def gzip_compress(self, index, input_file):
@@ -344,21 +327,22 @@ class BasicDataset(Dataset):
         target_file_path = f'{self.processed_img_dir}{os.path.sep}{item_index}_target.hdf5'
 
         correct_order_triplet = [query_file_path, target_file_path, mask_file_path]
-        triplet_element_order = ["query", "target", "mask"]
 
-        return_dict = {}
+        # return_tuple = []
         for file in correct_order_triplet:
             if not os.path.exists(file):
-                return_dict = self.preprocess(item_index, self.images_path[item_index])
+                return_tuple = self.preprocess(item_index, self.images_path[item_index])
                 break
         else:
-            triplet_index = 0
+            return_tuple = []
             for file in correct_order_triplet:
                 if os.path.exists(file):
-                    hdf5_file = self.read_hdf5_file(file)
-                    return_dict[triplet_element_order[triplet_index]] = to_pytorch(hdf5_file)
-                triplet_index += 1
-        return return_dict
+                    if self.save_to_disk_with_pytorch_representation:
+                        return_tuple.append(self.read_hdf5_file(file))
+                    else:
+                        return_tuple.append(to_pytorch(self.read_hdf5_file(file)))
+        # print(return_tuple)
+        return return_tuple
 
         # for file in correct_order_triplet:
         # # check if preprocessed file exists. if not, he will generate it. then return the triplet
@@ -385,5 +369,5 @@ def to_pytorch(image):
     img_trans = image_np.transpose((2, 0, 1))
     if img_trans.max() > 1:
         img_trans = img_trans / 255
-    return torch.from_numpy(img_trans).type(torch.FloatTensor)
-    # return img_trans
+    # return torch.from_numpy(img_trans).type(torch.FloatTensor)
+    return img_trans
