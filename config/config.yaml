@@ -1,0 +1,12 @@
+models:
+  LogoDetection:
+    path: "./stored_models/_"
+
+
+datasets:
+  FlickrLogos-32:
+    Properties:
+      paths:
+        images: "./data/dataset/FlickrLogos-v2/classes/jpg"
+        masks: "./data/dataset/FlickrLogos-v2/classes/masks"
+      bbox_suffix: ".bboxes.txt"

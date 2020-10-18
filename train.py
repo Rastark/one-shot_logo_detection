@@ -1,7 +1,9 @@
 import argparse
 import logging
 import os
+import sys
 import tqdm
+import yaml
 
 import numpy as np
 import torch
@@ -19,39 +21,10 @@ MODEL_HOME = os.path.abspath("./stored_models/")
 ALL_MODEL_NAMES = ["LogoDetectionModel"]
 ALL_DATASET_NAMES = ["FlickrLogos-32"]
 
+with open(os.path.abspath("./config/config.yaml")) as config:
+    config_list = yaml.load_all(config)
 
-model_path = "./stored_models/" + "_".join(["LogoDetection", args.dataset]) + ".pt"
-if args.load is not None:
-    model_path = args.load
-
-print("Loading %s dataset..." % args.dataset)
-imgs_dir = os.path.abspath("./data/dataset/FlickrLogos-v2/classes/jpg")
-masks_dir = os.path.abspath("./data/dataset/FlickrLogos-v2/classes/masks")
-dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir)
-
-print("Initializing model...")
-model = LogoDetectionModel(dataset=dataset,
-                           batch_norm=args.batch_norm,
-                           vgg_cfg=args.vgg_cfg)
-model.to('cuda')    # ???
-if args.load is not None:
-    model.load_state_dict(torch.load(model_path))
-
-print("Training model...")
-
-# Optimizer selection
-# build all the supported optimizers using the passed params (learning rate and decays if Adam)
-supported_optimizers = {
-    'Adam': optim.Adam(params=model.parameters(), lr=args.learning_rate, betas=(args.decay_adam_1, args.decay_adam_2),
-                       weight_decay=args.weight_decay),
-    'SGD': optim.SGD(params=model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-}
-
-# Choose which Torch Optimizer object to use, based on the passed name
-optimizer = supported_optimizers[args.optimizer]
-
-
-# # Apply Gaussian normalization to the model
+# # Appl.load_aly Gaussian normalization to the model
 # def weights_init(model):
 #     if isinstance(model, nn.Module):
 #         nn.init.normal_(model.weight.data, mean=0.0, std=0.01)
@@ -67,6 +40,8 @@ def train(model,
           optimizer,
           label_smooth,
           verbose,
+          dir_checkpoint,
+          save_cp=True,
           val_percent=0.1):
     # if (init_normal == True):
     #     weights_init(model)
@@ -83,7 +58,7 @@ def train(model,
     val_loader = DataLoader(val, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
 
     # Logging for TensorBoard
-    writer = SummaryWriter(comment=f'LR_{optimizer.lr}_BS_{batch_size}_OPT_{optimizer.class}')  # does optimizer.lr work?
+    writer = SummaryWriter(comment=f'LR_{optimizer.lr}_BS_{batch_size}_OPT_{type(optimizer).__name__}')  # does optimizer.lr work?
     global_step = 0
 
     logging.info(f'''Starting training:
@@ -138,6 +113,23 @@ def train(model,
                         writer.add_histogram('grads/' + tag, value.grad.cpu().numpy(), global_step)
                     # TODO Eval
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
+
+                    writer.add_images('query_images', queries, global_step)
+                    writer.add_images('target_images', targets, global_step)
+                    writer.add_images('masks/true', true_masks, global_step)
+                    writer.add_images('masks/pred', masks_pred, global_step)
+
+            if save_cp:
+                try:
+                    os.mkdir()
+                    logging.info('Created checkpoint directory')
+                except OSError:
+                    pass
+                torch.save(model.state_dict(),
+                    dir_checkpoint + f'CP_epoch{epoch + 1}.pth')
+                logging.info(f'Checkpoint {epoch + 1} saved!')
+
+            writer.close()
 
         # # WIP
         # # Launches evaluation on the model every evaluate_every steps.
@@ -259,7 +251,56 @@ def get_args():
     return parser.parse_args()
 
 
-
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     args = get_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logging.info(f'Using device {device}')
+
+    # TODO Modularize paths with respect to the current Dataset
+    imgs_dir = os.path.abspath("./data/dataset/FlickrLogos-v2/classes/jpg")
+    masks_dir = os.path.abspath("./data/dataset/FlickrLogos-v2/classes/masks")
+    
+    model_path = "./stored_models/" + "_".join(["LogoDetection", args.dataset]) + ".pt"
+    if args.load is not None:
+        model_path = args.load
+
+    print("Loading %s dataset..." % args.dataset)
+    dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir)
+
+    print("Initializing model...")
+    model = LogoDetectionModel(dataset=dataset,
+                            batch_norm=args.batch_norm,
+                            vgg_cfg=args.vgg_cfg)
+    model.to(device=device, dtype=torch.float32)    # ???
+    if args.load is not None:
+        model.load_state_dict(torch.load(model_path))
+
+
+    # Change here to adapt your data
+    model = LogoDetectionModel(n_channels=3)
+
+    # Optimizer selection
+    # build all the supported optimizers using the passed params (learning rate and decays if Adam)
+    supported_optimizers = {
+        'Adam': optim.Adam(params=model.parameters(), lr=args.learning_rate, betas=(args.decay_adam_1, args.decay_adam_2),
+                        weight_decay=args.weight_decay),
+        'SGD': optim.SGD(params=model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    }
+    # Choose which Torch Optimizer object to use, based on the passed name
+    optimizer = supported_optimizers[args.optimizer]
+
+    try:
+        train(model=model,
+              device=device,
+              batch_size=args.batch_size,
+              max_epochs=args.max_epochs,
+              save_path=args.sa 
+        )
+    except KeyboardInterrupt:
+        torch.save(model.state_dict(), 'INTERRUPTED.ph')
+        logging.info('Interrupt saved')
+        try:
+            sys.exit(0)
+        except SystemExit:
+            os._exit(0)
