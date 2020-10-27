@@ -1,6 +1,6 @@
 models:
   LogoDetection:
-    path: "./stored_models/_"
+    path: "./stored_models/LogoDetection"
 
 
 datasets:

@@ -13,16 +13,16 @@ from torch.utils.tensorboard import SummaryWriter
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .model.model import LogoDetectionModel
-from .utils.dataset_loader import BasicDataset
+from model.model import LogoDetection
+from utils.dataset_loader import BasicDataset
 
 # todo: when we add more models, we should move these variables to another location
 MODEL_HOME = os.path.abspath("./stored_models/")
-ALL_MODEL_NAMES = ["LogoDetectionModel"]
+ALL_MODEL_NAMES = ["LogoDetection"]
 ALL_DATASET_NAMES = ["FlickrLogos-32"]
 
 with open(os.path.abspath("./config/config.yaml")) as config:
-    config_list = yaml.load_all(config)
+    config_list = yaml.load(config, Loader=yaml.FullLoader)
 
 # # Appl.load_aly Gaussian normalization to the model
 # def weights_init(model):
@@ -35,42 +35,61 @@ def train(model,
         #   init_normal,
           batch_size,
           max_epochs,
-          save_path,
+        #   save_path,
           evaluate_every,
           optimizer,
           label_smooth,
           verbose,
-          dir_checkpoint,
+          checkpoint_dir,
           save_cp=True,
+          lr=4e-4,
+          weight_decay=5e-3,
+          decay_adam_1=0.9,
+          decay_adam_2=0.99,
           val_percent=0.1):
     # if (init_normal == True):
     #     weights_init(model)
 
-    dataset = BasicDataset(imgs_dir, masks_dir)
+    # delete this "save_to_disk", is to preserve my ssd :like:
+    dataset = BasicDataset(imgs_dir, masks_dir, save_to_disk=False)
+
+    # Optimizer selection
+    # build all the supported optimizers using the passed params (learning rate and decays if Adam)
+    supported_optimizers = {
+        'Adam': optim.Adam(params=model.parameters(), lr=lr, betas=(decay_adam_1, decay_adam_2),
+                        weight_decay=weight_decay),
+        'SGD': optim.SGD(params=model.parameters(), lr=lr, weight_decay=weight_decay)
+    }
+    # Choose which Torch Optimizer object to use, based on the passed name
+    optimizer = supported_optimizers[args.optimizer]
+
     
     # Splitting dataset
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
-    train, val = random_split(dataset, [n_train, n_val])
+    train_set, val_set = random_split(dataset, [n_train, n_val])
 
     # Loading dataset
-    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
 
     # Logging for TensorBoard
-    writer = SummaryWriter(comment=f'LR_{optimizer.lr}_BS_{batch_size}_OPT_{type(optimizer).__name__}')  # does optimizer.lr work?
+    writer = SummaryWriter(comment=f'LR_{lr}_BS_{batch_size}_OPT_{type(optimizer).__name__}')  # does optimizer.lr work?
     global_step = 0
 
     logging.info(f'''Starting training:
         Epochs:             {max_epochs}
         Batch size:         {batch_size}
-        Learning rate:      {optimizer.lr}
+        Learning rate:      {lr}
         Training size:      {n_train}
         Validation size:    {n_val}
         Device:             {device.type}
     ''')
 
-    criterion = nn.BCELoss() / (256*256)        # L = (1/(H*W)) * BCELoss
+    def criterion(pred, true):
+        return torch.div(nn.BCELoss()(pred, true), 256*256) # L = (1/(H*W)) * BCELoss
+        # TypeError: unsupported operand type(s) for /: 'BCELoss' and 'int'
+        # Ma poi, funziona scritto così? Sembra più una funzione assegnata a una variabile
 
     for epoch in range(max_epochs):
         model.train()   # set the model in training flag to True
@@ -78,21 +97,22 @@ def train(model,
         # epoch(batch_size, train_samples)
 
         # TODO
-        with tqdm.tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{max_epochs}', unit="img") as bar:
+        with tqdm.tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{max_epochs}', unit='img') as bar:
             bar.set_description(f'train loss')
 
             for batch in train_loader:
-                queries = batch[:, 0]       # Correct dimensions?
-                targets = batch[:, 1]
-                true_masks = batch[:, 2]
+                queries = batch['query']       # Correct dimensions?
+                targets = batch['target']
+                true_masks = batch['mask']
 
                 queries = queries.to(device=device, dtype=torch.float32)
                 targets = targets.to(device=device, dtype=torch.float32)
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
 
-                masks_pred = model(queries, targets)
-                loss = criterion(masks_pred, true_masks)
-                epoch_loss += loss.item()
+                pred_masks = model(queries, targets)
+                print(pred_masks.shape)
+                loss = criterion(pred_masks, true_masks)
+                epoch_loss += loss.detach().item() # is the .detach() needed?
 
                 # TensorBoard logging
                 writer.add_scalar('Loss/train', loss.item(), global_step)
@@ -117,7 +137,7 @@ def train(model,
                     writer.add_images('query_images', queries, global_step)
                     writer.add_images('target_images', targets, global_step)
                     writer.add_images('masks/true', true_masks, global_step)
-                    writer.add_images('masks/pred', masks_pred, global_step)
+                    writer.add_images('masks/pred', pred_masks, global_step)
 
             if save_cp:
                 try:
@@ -126,7 +146,7 @@ def train(model,
                 except OSError:
                     pass
                 torch.save(model.state_dict(),
-                    dir_checkpoint + f'CP_epoch{epoch + 1}.pth')
+                    checkpoint_dir + f'CP_epoch{epoch + 1}.pt')
                 logging.info(f'Checkpoint {epoch + 1} saved!')
 
             writer.close()
@@ -147,11 +167,11 @@ def train(model,
         #     torch.save(self.model.state_dict(), save_path)
         # print("\tDone.")
 
-print("\nEvaluating model...")
-model.eval()
-mrr, h1 = Evaluator(model=model).eval(samples=dataset.test_samples, write_output=False)
-print("\tTest Hits@1: %f" % h1)
-print("\tTest Mean Reciprocal Rank: %f" % mrr)
+# print("\nEvaluating model...")
+# model.eval()
+# mrr, h1 = Evaluator(model=model).eval(samples=dataset.test_samples, write_output=False)
+# print("\tTest Hits@1: %f" % h1)
+# print("\tTest Mean Reciprocal Rank: %f" % mrr)
 
 
 def get_args():
@@ -229,7 +249,7 @@ def get_args():
                         )
 
     parser.add_argument('--load',
-                        type=bool,
+                        type=str,
                         required=False,
                         help="Path to the model to load"
                         )
@@ -241,13 +261,27 @@ def get_args():
                         help="If True, apply batch normalization",
                         )
 
-    parser.add_argument('--vgg-cfg',
+    parser.add_argument('--vgg_cfg',
                         type=str,
                         default='A',
                         help="VGG architecture config",
                         required=False
                         )
 
+    parser.add_argument('--step_eval',
+                        type=int,
+                        default=0,
+                        help="Enables automatic evaluation checks every X step",
+                        required=False
+                        )
+
+    parser.add_argument('--val_split',
+                        type=float,
+                        default=0.1,
+                        help="Forces the validation subset to be split according to the set value. Must a value in the [0-1] or the sofware WILL break",
+                        required=False
+                        )
+    
     return parser.parse_args()
 
 
@@ -258,44 +292,49 @@ if __name__ == '__main__':
     logging.info(f'Using device {device}')
 
     # TODO Modularize paths with respect to the current Dataset
-    imgs_dir = os.path.abspath("./data/dataset/FlickrLogos-v2/classes/jpg")
-    masks_dir = os.path.abspath("./data/dataset/FlickrLogos-v2/classes/masks")
+    imgs_dir = os.path.abspath("data/dataset/FlickrLogos-v2/classes/jpg")
+    masks_dir = os.path.abspath("data/dataset/FlickrLogos-v2/classes/masks")
+    checkpoint_dir = os.path.abspath("checkpoints")
     
-    model_path = "./stored_models/" + "_".join(["LogoDetection", args.dataset]) + ".pt"
-    if args.load is not None:
-        model_path = args.load
-
-    print("Loading %s dataset..." % args.dataset)
-    dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir)
-
-    print("Initializing model...")
-    model = LogoDetectionModel(dataset=dataset,
-                            batch_norm=args.batch_norm,
-                            vgg_cfg=args.vgg_cfg)
-    model.to(device=device, dtype=torch.float32)    # ???
-    if args.load is not None:
-        model.load_state_dict(torch.load(model_path))
+    
+    model_path = config_list['models']['LogoDetection']['path'] + "_".join(["LogoDetection", args.dataset]) + ".pt"
 
 
+    # print("Loading %s dataset..." % args.dataset)
+    # dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir)
+
+    
     # Change here to adapt your data
-    model = LogoDetectionModel(n_channels=3)
+    print("Initializing model...")
+    model = LogoDetection(batch_norm=args.batch_norm,
+                          vgg_cfg=args.vgg_cfg)
+    model.to(device=device, dtype=torch.float32)    # ??????
+    # stiamo dando ad "args.load" due compiti, quello di dirci il path e quello di dirci se caricare vecchi checkpoint
+    if args.load is not None:
+        model.load_state_dict(
+            torch.load(model_path, map_location=device)
+        )
+        logging.info(f'Model loaded from {model_path}')
+    model.to(device=device)
 
-    # Optimizer selection
-    # build all the supported optimizers using the passed params (learning rate and decays if Adam)
-    supported_optimizers = {
-        'Adam': optim.Adam(params=model.parameters(), lr=args.learning_rate, betas=(args.decay_adam_1, args.decay_adam_2),
-                        weight_decay=args.weight_decay),
-        'SGD': optim.SGD(params=model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-    }
-    # Choose which Torch Optimizer object to use, based on the passed name
-    optimizer = supported_optimizers[args.optimizer]
 
     try:
         train(model=model,
               device=device,
               batch_size=args.batch_size,
               max_epochs=args.max_epochs,
-              save_path=args.sa 
+            #   save_path=args.save_path,
+              evaluate_every=args.step_eval,
+              optimizer=args.optimizer,
+              lr=args.learning_rate,
+              weight_decay=args.weight_decay,
+              decay_adam_1=args.decay1,
+              decay_adam_2=args.decay2,
+              label_smooth=args.label_smooth,
+              verbose=args.verbose,
+              checkpoint_dir=checkpoint_dir,
+              save_cp=True,
+              val_percent=args.val_split
         )
     except KeyboardInterrupt:
         torch.save(model.state_dict(), 'INTERRUPTED.ph')
