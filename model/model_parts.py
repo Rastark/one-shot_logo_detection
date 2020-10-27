@@ -71,7 +71,7 @@ class OneOneConv(nn.Module):
         super(OneOneConv, self).__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=1),
-            # nn.Conv2d(out_channels, out_channels, kernel_size=1),
+            # nn.Conv2d(out_channels, out_channels, kernel_size=1), # kernel_size=3, padding=1
             nn.ReLU(inplace=True)
         )
 
@@ -89,7 +89,7 @@ class OneOneConv(nn.Module):
 
 
 class VGG16(nn.Module):
-    def __init__(self, batch_norm=False, cfg='A'):
+    def __init__(self, batch_norm=False, cfg='A', in_channels=3):
         super(VGG16, self).__init__()
         self.batch_norm = batch_norm
 
@@ -100,18 +100,18 @@ class VGG16(nn.Module):
 
         self.cfg = self.cfgs[cfg]
 
-    def forward(self, x):
-        layers = []
-        in_channels = 3
+        self.layers = []
         for v in self.cfg:
             if v == 'M':
-                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+                self.layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
             else:
                 conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
                 if self.batch_norm:
-                    layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+                    self.layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
                 else:
-                    layers += [conv2d, nn.ReLU(inplace=True)]
+                    self.layers += [conv2d, nn.ReLU(inplace=True)]
                 in_channels = v
-        model = nn.Sequential(*layers)
-        return model(x)
+        self.vgg16 = nn.Sequential(*self.layers)
+
+    def forward(self, x):
+        return self.vgg16(x)

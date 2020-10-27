@@ -64,7 +64,7 @@ def train(model,
     optimizer = supported_optimizers[args.optimizer]
 
     
-    # Splitting dataset
+    # Splitting dataset 
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train_set, val_set = random_split(dataset, [n_train, n_val])
@@ -308,7 +308,6 @@ if __name__ == '__main__':
     print("Initializing model...")
     model = LogoDetection(batch_norm=args.batch_norm,
                           vgg_cfg=args.vgg_cfg)
-    model.to(device=device, dtype=torch.float32)    # ??????
     # stiamo dando ad "args.load" due compiti, quello di dirci il path e quello di dirci se caricare vecchi checkpoint
     if args.load is not None:
         model.load_state_dict(
