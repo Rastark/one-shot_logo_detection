@@ -110,7 +110,7 @@ def train(model,
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
 
                 pred_masks = model(queries, targets)
-                print(pred_masks.shape)
+                # print(pred_masks.shape)
                 loss = criterion(pred_masks, true_masks)
                 epoch_loss += loss.detach().item() # is the .detach() needed?
 
