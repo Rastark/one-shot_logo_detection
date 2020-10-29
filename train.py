@@ -15,6 +15,7 @@ import torch.nn.functional as F
 
 from model.model import LogoDetection
 from utils.dataset_loader import BasicDataset
+from eval import eval
 
 # todo: when we add more models, we should move these variables to another location
 MODEL_HOME = os.path.abspath("./stored_models/")
@@ -131,7 +132,7 @@ def train(model,
                         tag = tag.replace('.', '/')
                         writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                         writer.add_histogram('grads/' + tag, value.grad.cpu().numpy(), global_step)
-                    # TODO Eval
+                    val_score = eval(net, val_loader, device)
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
                     writer.add_images('query_images', queries, global_step)
