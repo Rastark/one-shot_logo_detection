@@ -25,6 +25,7 @@ ALL_DATASET_NAMES = ["FlickrLogos-32"]
 with open(os.path.abspath("./config/config.yaml")) as config:
     config_list = yaml.load(config, Loader=yaml.FullLoader)
 
+
 # # Appl.load_aly Gaussian normalization to the model
 # def weights_init(model):
 #     if isinstance(model, nn.Module):
@@ -33,10 +34,10 @@ with open(os.path.abspath("./config/config.yaml")) as config:
 
 def train(model,
           device,
-        #   init_normal,
+          #   init_normal,
           batch_size,
           max_epochs,
-        #   save_path,
+          #   save_path,
           evaluate_every,
           optimizer,
           label_smooth,
@@ -58,21 +59,21 @@ def train(model,
     # build all the supported optimizers using the passed params (learning rate and decays if Adam)
     supported_optimizers = {
         'Adam': optim.Adam(params=model.parameters(), lr=lr, betas=(decay_adam_1, decay_adam_2),
-                        weight_decay=weight_decay),
+                           weight_decay=weight_decay),
         'SGD': optim.SGD(params=model.parameters(), lr=lr, weight_decay=weight_decay)
     }
     # Choose which Torch Optimizer object to use, based on the passed name
     optimizer = supported_optimizers[args.optimizer]
 
-    
-    # Splitting dataset 
+    # Splitting dataset
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train_set, val_set = random_split(dataset, [n_train, n_val])
 
     # Loading dataset
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True,
+                            drop_last=True)
 
     # Logging for TensorBoard
     writer = SummaryWriter(comment=f'LR_{lr}_BS_{batch_size}_OPT_{type(optimizer).__name__}')  # does optimizer.lr work?
@@ -88,12 +89,13 @@ def train(model,
     ''')
 
     def criterion(pred, true):
-        return torch.div(nn.BCELoss()(pred, true), 256*256) # L = (1/(H*W)) * BCELoss
+        return torch.div(nn.BCELoss()(pred, true), 256 * 256)  # L = (1/(H*W)) * BCELoss
         # TypeError: unsupported operand type(s) for /: 'BCELoss' and 'int'
         # Ma poi, funziona scritto così? Sembra più una funzione assegnata a una variabile
 
+    last_epoch_val_score = 0
     for epoch in range(max_epochs):
-        model.train()   # set the model in training flag to True
+        model.train()  # set the model in training flag to True
         epoch_loss = 0  # resets the loss for the current epoch
         # epoch(batch_size, train_samples)
 
@@ -102,7 +104,7 @@ def train(model,
             bar.set_description(f'train loss')
 
             for batch in train_loader:
-                queries = batch['query']       # Correct dimensions?
+                queries = batch['query']  # Correct dimensions?
                 targets = batch['target']
                 true_masks = batch['mask']
 
@@ -113,7 +115,7 @@ def train(model,
                 pred_masks = model(queries, targets)
                 # print(pred_masks.shape)
                 loss = criterion(pred_masks, true_masks)
-                epoch_loss += loss.detach().item() # is the .detach() needed?
+                epoch_loss += loss.detach().item()  # is the .detach() needed?
 
                 # TensorBoard logging
                 writer.add_scalar('Loss/train', loss.item(), global_step)
@@ -132,7 +134,7 @@ def train(model,
                         tag = tag.replace('.', '/')
                         writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                         writer.add_histogram('grads/' + tag, value.grad.cpu().numpy(), global_step)
-                    val_score = eval(net, val_loader, device)
+                    val_score = eval(model, val_loader, device)
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
                     writer.add_images('query_images', queries, global_step)
@@ -140,15 +142,19 @@ def train(model,
                     writer.add_images('masks/true', true_masks, global_step)
                     writer.add_images('masks/pred', pred_masks, global_step)
 
-            if save_cp:
+            if save_cp and val_score > last_epoch_val_score:
                 try:
                     os.mkdir()
                     logging.info('Created checkpoint directory')
                 except OSError:
                     pass
+                model_files = [f for f in os.listdir(checkpoint_dir) if os.path.isfile(os.path.join(checkpoint_dir, f))]
                 torch.save(model.state_dict(),
-                    checkpoint_dir + f'CP_epoch{epoch + 1}.pt')
+                           checkpoint_dir + f'CP_epoch{epoch + 1}.pt')
+                for model_file in model_files:
+                    os.remove(f'{checkpoint_dir}{model_file}')
                 logging.info(f'Checkpoint {epoch + 1} saved!')
+                last_epoch_val_score = val_score
 
             writer.close()
 
@@ -167,6 +173,7 @@ def train(model,
         #     print("\tSaving model...")
         #     torch.save(self.model.state_dict(), save_path)
         # print("\tDone.")
+
 
 # print("\nEvaluating model...")
 # model.eval()
@@ -282,7 +289,7 @@ def get_args():
                         help="Forces the validation subset to be split according to the set value. Must a value in the [0-1] or the sofware WILL break",
                         required=False
                         )
-    
+
     return parser.parse_args()
 
 
@@ -296,15 +303,12 @@ if __name__ == '__main__':
     imgs_dir = os.path.abspath("data/dataset/FlickrLogos-v2/classes/jpg")
     masks_dir = os.path.abspath("data/dataset/FlickrLogos-v2/classes/masks")
     checkpoint_dir = os.path.abspath("checkpoints")
-    
-    
-    model_path = config_list['models']['LogoDetection']['path'] + "_".join(["LogoDetection", args.dataset]) + ".pt"
 
+    model_path = config_list['models']['LogoDetection']['path'] + "_".join(["LogoDetection", args.dataset]) + ".pt"
 
     # print("Loading %s dataset..." % args.dataset)
     # dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir)
 
-    
     # Change here to adapt your data
     print("Initializing model...")
     model = LogoDetection(batch_norm=args.batch_norm,
@@ -317,13 +321,12 @@ if __name__ == '__main__':
         logging.info(f'Model loaded from {model_path}')
     model.to(device=device)
 
-
     try:
         train(model=model,
               device=device,
               batch_size=args.batch_size,
               max_epochs=args.max_epochs,
-            #   save_path=args.save_path,
+              #   save_path=args.save_path,
               evaluate_every=args.step_eval,
               optimizer=args.optimizer,
               lr=args.learning_rate,
@@ -335,7 +338,7 @@ if __name__ == '__main__':
               checkpoint_dir=checkpoint_dir,
               save_cp=True,
               val_percent=args.val_split
-        )
+              )
     except KeyboardInterrupt:
         torch.save(model.state_dict(), 'INTERRUPTED.ph')
         logging.info('Interrupt saved')
