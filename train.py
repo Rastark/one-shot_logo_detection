@@ -68,6 +68,7 @@ def train(model,
     # Splitting dataset
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
+    # TODO: Il validation set dovrebbe avere il 10% di ogni classe e non il 10% del totale altrimenti verrebbe sbilanciato
     train_set, val_set = random_split(dataset, [n_train, n_val])
 
     # Loading dataset

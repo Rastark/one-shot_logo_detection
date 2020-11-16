@@ -14,6 +14,7 @@ import tables
 
 # TODO: Deve preprocessare anche le immagini di test
 # TODO: Ha da funzionà co TorchVision, se hai tempo
+# TODO: Visto che le maschere ci servono solo per estrapolare le bbox e confrontarle con quelle stimate, ha senso portarsi tutta la maschera e non le singole bbox?
 class BasicDataset(Dataset):
     TARGET_IMAGE_PATH = "target_image_path"
     MASK_IMAGE_PATH = "mask_image_path"
