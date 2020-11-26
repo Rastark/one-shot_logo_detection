@@ -130,6 +130,12 @@ def train(model,
 
                 bar.update(queries.shape[0])
                 global_step += 1
+                if n_train % batch_size == 0: 
+                    n_batch = n_train // batch_size
+                else:
+                    n_batch = n_train // batch_size + 1
+                len(train_loader)
+                # Deve farlo sia in mezzo ai batch che a fine epoca. Modifica la condizione dell'if
                 if global_step % (n_train // (10 * batch_size)) == 0:
                     for tag, value in model.named_parameters():
                         tag = tag.replace('.', '/')
