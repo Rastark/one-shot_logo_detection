@@ -21,40 +21,47 @@ class BasicDataset(Dataset):
     BBOX_PATH = "bbox_path"
     TARGET_IMAGE_BBOX_PATH = "target_image_bbox_path"
 
-    def __init__(self, imgs_dir: str, masks_dir: str, mask_image_dim=256, query_dim=64, mask_suffix='.bboxes.txt',
-                 save_to_disk=True, save_to_disk_with_pytorch_representation=False):
+    def __init__(self, imgs_dir: str, masks_dir: str, dataset_name: str, mask_image_dim: int = 256, query_dim: int = 64,
+                 mask_suffix: str = '.bboxes.txt', save_to_disk: bool = False):
         self.imgs_dir = imgs_dir
         self.masks_dir = masks_dir
-        self.processed_img_dir = str(imgs_dir[:imgs_dir.rindex(os.path.sep) + 1]) + "processed"
+        self.processed_img_dir = str(imgs_dir[:imgs_dir.rindex(os.path.sep) + 1]) + "preprocessed"
         self.mask_img_dim = mask_image_dim
         self.query_dim = query_dim
         self.mask_suffix = mask_suffix
         self.save_to_disk = save_to_disk
-        self.save_to_disk_with_pytorch_representation = save_to_disk_with_pytorch_representation
         assert mask_image_dim > 1, 'The dimension of mask and image must be higher than 1'
         assert query_dim > 1, 'The dimension of query image must be higher than 1'
 
+        # TODO: Puoi scriverlo come un assert
         if not os.path.isdir(imgs_dir):
-            raise Exception("Bad path for images directory")
+            raise Exception(f"Bad path for images directory: {imgs_dir}")
 
+        # TODO: Puoi scriverlo come un assert
         if not os.path.isdir(masks_dir):
-            raise Exception("Bad path for masks directory")
+            raise Exception(f"Bad path for masks directory: {masks_dir}")
 
-        # create processed image's directory, if not exists yet
-        try:
-            os.mkdir(self.processed_img_dir)
-        except FileExistsError:
-            # some previous instance generate this directory, no need to raise an exception
-            pass
+        if save_to_disk:
+            # create processed image's directory, if not exists yet
+            try:
+                os.mkdir(self.processed_img_dir)
+            except FileExistsError:
+                # some previous instance generate this directory, no need to raise an exception
+                pass
 
-        # list of dict with the path of the images. here you will find the path of the following images:
+        # list of dict with the path of the images, which contains the paths for the following images:
         #       target, mask, bbox, target's bbox
-        # every dict has 4 str key and every key has a str value
+        # every dict is defined by 4 str keys which have a str value
         # key = type of image
         # value = path of the image
+
+        # List of dict. Every dict refers to an image with 4 keys:
+        #       target, mask, bbox, query_target_bbox
         self.images_path = []
 
-        self.flickrlogos32_load()
+        # TODO: Fai in modo che preprocess calcoli sia la maschera che il bbox e poi, in base al dataset, togline uno
+        if dataset_name == "FlickrLogos-32":
+            self.flickrlogos32_load()
 
     def __len__(self):
         return len(self.images_path)
@@ -97,7 +104,7 @@ class BasicDataset(Dataset):
                          self.BBOX_PATH: f'{masks_dict[target_image_name][:masks_dict[target_image_name].rindex(".mask")]}{self.mask_suffix}'}
                     try:
                         image_path_element[target_image_class].append(x)
-                    except:
+                    except KeyError:
                         image_path_element[target_image_class] = [x]
 
         # fill "images_path" variable. it generate every couple (target image, query image) for the same class
@@ -115,7 +122,7 @@ class BasicDataset(Dataset):
                                                  self.MASK_IMAGE_PATH: mask_image_path,
                                                  self.BBOX_PATH: bbox_path,
                                                  self.TARGET_IMAGE_BBOX_PATH: outer_target_image_path})
-        print(len(self.images_path))
+        print(f"You have {len(self.images_path)} triplets")
 
     # TODO: Calcola la shape della tripletta ma non chiamarlo "shape"
     def shape(self):
@@ -125,140 +132,68 @@ class BasicDataset(Dataset):
     # stretch the target image
     # stretch, crop and stretch again the query image
     # stretch the mask image
-    # TODO: Deve tornare una lista o un ndarray?
-    def preprocess(self, index: int, files_path: dict) -> object:
-        # extract paths from files_path
-        target_image_path = files_path[self.TARGET_IMAGE_PATH]
-        mask_image_path = files_path[self.MASK_IMAGE_PATH]
-        bbox_path = files_path[self.BBOX_PATH]
-        target_image_bbox_path = files_path[self.TARGET_IMAGE_BBOX_PATH]
+    @classmethod
+    def preprocess(cls, target_img_path: str, bbox_path: str, query_full_img_path: str, img_dim: int = 256,
+                   query_img_dim: int = 64, mask_img_path: str = None) -> dict:
 
         # Target image
 
-        pil_target_image = Image.open(target_image_path)
+        pil_target_img = Image.open(target_img_path)
         # stretch the image
-        pil_resized_target_image = pil_target_image.resize((self.mask_img_dim, self.mask_img_dim))
+        pil_resized_target_img = pil_target_img.resize((img_dim, img_dim))
 
         # Query image
 
-        pil_target_image_bbox = Image.open(target_image_bbox_path)
-        pil_resized_target_image_bbox = pil_target_image_bbox.resize((self.mask_img_dim, self.mask_img_dim))
+        pil_target_img_bbox = Image.open(query_full_img_path)
+        pil_resized_target_img_bbox = pil_target_img_bbox.resize((img_dim, img_dim))
 
         # we will resize, crop and resize again the image but we have the coordinates of the non resized bounding box
-        original_width_target_image, original_height_target_image = pil_target_image_bbox.size
-        resized_width_target_image, resized_height_target_image = pil_resized_target_image_bbox.size
-        percentage_width = round(100 * int(resized_width_target_image) / (int(original_width_target_image)), 2) / 100
-        percentage_height = round(100 * int(resized_height_target_image) / (int(original_height_target_image)), 2) / 100
+        target_img_width, target_img_height = pil_target_img_bbox.size
+        resized_target_img_width, resized_target_img_height = pil_resized_target_img_bbox.size
+        percent_width = round(100 * int(resized_target_img_width) / (int(target_img_width)), 2) / 100
+        percent_height = round(100 * int(resized_target_img_height) / (int(target_img_height)), 2) / 100
 
         # open the bounding box file
         with open(bbox_path) as bbox_file:
             # read only the first line of the bbox file
             bbox_lines = bbox_file.readlines()
-            first_line_bbox_splitted = bbox_lines[1].split(' ')
+            first_line_bbox = bbox_lines[1].split(' ')
             # check if we correctly skipped the first line of the file, the one with no number,
             # and if all the elements are numeric, like every coordinate should be ;)
-            if first_line_bbox_splitted[0].isnumeric() and first_line_bbox_splitted[1].isnumeric() and \
-                    first_line_bbox_splitted[2].isnumeric() and first_line_bbox_splitted[3].rstrip().isnumeric():
-                x, y, width, height = first_line_bbox_splitted
+            if first_line_bbox[0].isnumeric() and first_line_bbox[1].isnumeric() and \
+                    first_line_bbox[2].isnumeric() and first_line_bbox[3].rstrip().isnumeric():
+                x, y, width, height = first_line_bbox
                 # adapt the old coordinates to the new stretched dimension
-                left = int(x.strip()) * percentage_width
-                upper = int(y.strip()) * percentage_height
-                right = int(int(x.strip()) + int(width)) * percentage_width
-                lower = int(int(y.strip()) + int(height)) * percentage_height
+                left = int(x.strip()) * percent_width
+                upper = int(y.strip()) * percent_height
+                right = int(int(x.strip()) + int(width)) * percent_width
+                lower = int(int(y.strip()) + int(height)) * percent_height
                 # crop and resize the query image
-                pil_query_image = pil_resized_target_image_bbox.crop((left, upper, right, lower))
-                pil_resized_query_image = pil_query_image.resize((self.query_dim, self.query_dim))
+                pil_query_img = pil_resized_target_img_bbox.crop((left, upper, right, lower))
+                pil_resized_query_img = pil_query_img.resize((query_img_dim, query_img_dim))
             else:
                 # TODO: nel traceback compare "error_string" e poi successivamente spiega l'eccezione. Trova un modo per togliere quel "error_string"
-                error_string = f'Bounding box file\'s first line should have 4 groups of integers with whitespace separator. Check {bbox_path}'
+                error_string = f"Bounding box file's first line should have 4 groups of integers with whitespace " \
+                               f"separator. Check {bbox_path}"
                 raise Exception(error_string)
 
         # Mask
 
-        pil_mask = Image.open(mask_image_path)
-        pil_resized_mask = pil_mask.resize((self.mask_img_dim, self.mask_img_dim))
+        if mask_img_path:
+            pil_mask = Image.open(mask_img_path)
+            pil_resized_mask = pil_mask.resize((img_dim, img_dim))
+        else:
+            pil_resized_mask = None
 
         # just to test if everything works. don't look at these :)
         # pil_resized_target_image.save('target.jpg')
         # pil_resized_query_image.save('query.jpg')
         # pil_resized_mask.save('mask.jpg')
 
-        # now you will find a lot of stuff, we are trying to figure out which combination is better
-        # seems like the best one is the one with h5py and "to_torch" after the decompression
-
-        return_list = self.create_triplet_with_torch_representation(pil_resized_query_image,
-                                                                    pil_resized_target_image,
-                                                                    pil_resized_mask)
-        if self.save_to_disk_with_pytorch_representation:
-            triplet_list = return_list
-        else:
-            # get the triplet list in a simple array representation
-            triplet_list = self.create_triplet_without_torch_representation(pil_resized_query_image,
-                                                                            pil_resized_target_image,
-                                                                            pil_resized_mask)
-        if self.save_to_disk:
-            # input_file = self.np_save_compressed(index, triplet_list)
-
-            self.store_hdf5_file_with_compression(triplet_list, index)
-
-            # self.store_hdf5_file_with_compression(triplet_list[2], index, "mask")
-            # self.store_hdf5_file_with_compression(triplet_list[0], index, "query")
-            # self.store_hdf5_file_with_compression(triplet_list[1], index, "target")
-
-            # if self.save_to_disk_with_pytorch_representation:
-            #     mask_file = self.h5py_with_pytorch(triplet_list[2], index, "mask")
-            #     query_file = self.h5py_with_pytorch(triplet_list[0], index, "query")
-            #     target_file = self.h5py_with_pytorch(triplet_list[1], index, "target")
-            # else:
-            #     mask_file = self.h5py_without_pytorch(triplet_list[2], index, "mask")
-            #     query_file = self.h5py_without_pytorch(triplet_list[0], index, "query")
-            #     target_file = self.h5py_without_pytorch(triplet_list[1], index, "target")
-
-            # gzip_mask = self.gzip_compress(index, mask_file)
-            # gzip_query = self.gzip_compress(index, query_file)
-            # gzip_target = self.gzip_compress(index, target_file)
-            #
-            # unzipped_mask = self.gzip_uncompress(gzip_mask)
-            # unzipped_query = self.gzip_uncompress(gzip_query)
-            # unzipped_target = self.gzip_uncompress(gzip_target)
-
-            # print(unzipped_target)
-
-            # h5py_file_mask = self.read_h5py(unzipped_mask)
-            # h5py_file_query = self.read_h5py(unzipped_query)
-            # h5py_file_target = self.read_h5py(unzipped_target)
-
-            # if not self.save_to_disk_with_pytorch_representation:
-            #     img_mask = Image.fromarray(h5py_file_mask)
-            #     img_mask.save('mask.jpg')
-            #     img_query = Image.fromarray(h5py_file_query)
-            #     img_query.save('query.jpg')
-            #     img_target = Image.fromarray(h5py_file_target)
-            #     img_target.save('target.jpg')
-
-            # self.gzip_compress(index, input_file)
-
         # return the triplet (Dq, Dt, Dm) where Dq is the query image, Dt is the target image and Dm is the mask image
-        return return_list
-
-    # dude, the name says all. just read it :/
-    def create_triplet_without_torch_representation(self, pil_query, pil_target, pil_mask):
-        # return [np.array(pil_query), np.array(pil_target), np.array(pil_mask)]
-        # return np.array([np.array(pil_query), np.array(pil_target), np.array(pil_mask)])
-        return {
-            "query": np.array(pil_query),
-            "target": np.array(pil_target),
-            "mask": np.array(pil_mask)
-        }
-
-    def create_triplet_with_torch_representation(self, pil_query, pil_target, pil_mask):
-        # return [to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)]
-        # return np.array([to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)])
-        return {
-            "query": to_pytorch(pil_query),
-            "target": to_pytorch(pil_target),
-            "mask": to_pytorch(pil_mask)
-        }
+        return create_triplet_without_torch_representation(pil_resized_query_img,
+                                                           pil_resized_target_img,
+                                                           pil_resized_mask)
 
     # def h5py_with_pytorch(self, pil_img, index, type):
     #     x = self.h5py_compression(to_pytorch(pil_img), index, type)
@@ -339,6 +274,7 @@ class BasicDataset(Dataset):
     #     return f'{file_name}.npz'
 
     def __getitem__(self, item_index):
+        print(f"Getting item {item_index}")
         # get the path of the preprocessed file, if exists
         mask_file_path = f'{self.processed_img_dir}{os.path.sep}{item_index}_mask.hdf5'
         query_file_path = f'{self.processed_img_dir}{os.path.sep}{item_index}_query.hdf5'
@@ -350,7 +286,15 @@ class BasicDataset(Dataset):
         return_dict = {}
         for file in correct_order_triplet:
             if not os.path.exists(file):
-                return_dict = self.preprocess(item_index, self.images_path[item_index])
+                # triplet = self.preprocess(item_index, self.images_path[item_index])
+                print(f"Preprocessing")
+                return_dict = self.preprocess(target_img_path=self.images_path[item_index][self.TARGET_IMAGE_PATH],
+                                              bbox_path=self.images_path[item_index][self.BBOX_PATH],
+                                              query_full_img_path=self.images_path[item_index][
+                                                  self.TARGET_IMAGE_BBOX_PATH],
+                                              mask_img_path=self.images_path[item_index][self.MASK_IMAGE_PATH])
+                if self.save_to_disk:
+                    self.store_hdf5_file_with_compression(return_dict, item_index)
                 break
         else:
             triplet_index = 0
@@ -372,9 +316,9 @@ class BasicDataset(Dataset):
 
 
 # something that will be deleted
-class CarvanaBasicDataset(BasicDataset):
-    def __init__(self, imgs_dir, masks_dir, scale=1):
-        super().__init__(imgs_dir, masks_dir, scale, mask_suffix='_mask')
+# class CarvanaBasicDataset(BasicDataset):
+#     def __init__(self, imgs_dir, masks_dir, scale=1):
+#         super().__init__(imgs_dir, masks_dir, scale, mask_suffix='_mask')
 
 
 def to_pytorch(image):
@@ -388,3 +332,23 @@ def to_pytorch(image):
         img_trans = img_trans / 255
     return torch.from_numpy(img_trans).type(torch.FloatTensor)
     # return img_trans
+
+
+# dude, the name says all. just read it :/
+def create_triplet_without_torch_representation(pil_query, pil_target, pil_mask):
+    # return [np.array(pil_query), np.array(pil_target), np.array(pil_mask)]
+    # return np.array([np.array(pil_query), np.array(pil_target), np.array(pil_mask)])
+    return {
+        "query": np.array(pil_query),
+        "target": np.array(pil_target),
+        "mask": np.array(pil_mask)
+    }
+
+# def create_triplet_with_torch_representation(pil_query, pil_target, pil_mask):
+#     # return [to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)]
+#     # return np.array([to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)])
+#     return {
+#         "query": to_pytorch(pil_query),
+#         "target": to_pytorch(pil_target),
+#         "mask": to_pytorch(pil_mask)
+#     }
