@@ -33,13 +33,9 @@ class BasicDataset(Dataset):
         assert mask_image_dim > 1, 'The dimension of mask and image must be higher than 1'
         assert query_dim > 1, 'The dimension of query image must be higher than 1'
 
-        # TODO: Puoi scriverlo come un assert
-        if not os.path.isdir(imgs_dir):
-            raise Exception(f"Bad path for images directory: {imgs_dir}")
+        assert not os.path.isdir(imgs_dir), f"Bad path for images directory: {imgs_dir}"
 
-        # TODO: Puoi scriverlo come un assert
-        if not os.path.isdir(masks_dir):
-            raise Exception(f"Bad path for masks directory: {masks_dir}")
+        assert not os.path.isdir(masks_dir), f"Bad path for masks directory: {masks_dir}"
 
         if save_to_disk:
             # create processed image's directory, if not exists yet
