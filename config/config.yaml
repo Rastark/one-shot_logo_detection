@@ -1,12 +1,17 @@
 models:
   LogoDetection:
-    path: "./stored_models/LogoDetection"
-
+    paths:
+      model: "./stored_models/LogoDetection"
+      train_cp: "./data/stored_models/checkpoints"
 
 datasets:
   FlickrLogos-32:
-    Properties:
       paths:
         images: "./data/dataset/FlickrLogos-v2/classes/jpg"
         masks: "./data/dataset/FlickrLogos-v2/classes/masks"
+      bbox_suffix: ".bboxes.txt"
+  TopLogos-10:
+      paths:
+        images: "./data/dataset/qmul_toplogo10/jpg"
+        masks: "./data/dataset/qmul_toplogo10/masks"
       bbox_suffix: ".bboxes.txt"

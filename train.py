@@ -25,65 +25,34 @@ ALL_DATASET_NAMES = ["FlickrLogos-32"]
 with open(os.path.abspath("./config/config.yaml")) as config:
     config_list = yaml.load(config, Loader=yaml.FullLoader)
 
-
 # # Appl.load_aly Gaussian normalization to the model
 # def weights_init(model):
 #     if isinstance(model, nn.Module):
 #         nn.init.normal_(model.weight.data, mean=0.0, std=0.01)
 
-
 def train(model,
           device,
-          #   init_normal,
-          batch_size,
+          train_loader,
+          val_loader,
           max_epochs,
-          #   save_path,
-          evaluate_every,
           optimizer,
-          label_smooth,
           verbose,
           checkpoint_dir,
-          save_cp=True,
-          lr=4e-4,
-          weight_decay=5e-3,
-          decay_adam_1=0.9,
-          decay_adam_2=0.99,
-          val_percent=0.1):
-    # if (init_normal == True):
-    #     weights_init(model)
+          model_path,
+          save_cp,
+          ):
 
-    # delete this "save_to_disk", is to preserve my ssd :like:
-    dataset = BasicDataset(imgs_dir, masks_dir, save_to_disk=False)
-
-    # Optimizer selection
-    # build all the supported optimizers using the passed params (learning rate and decays if Adam)
-    supported_optimizers = {
-        'Adam': optim.Adam(params=model.parameters(), lr=lr, betas=(decay_adam_1, decay_adam_2),
-                           weight_decay=weight_decay),
-        'SGD': optim.SGD(params=model.parameters(), lr=lr, weight_decay=weight_decay)
-    }
-    # Choose which Torch Optimizer object to use, based on the passed name
-    optimizer = supported_optimizers[args.optimizer]
-
-    # Splitting dataset
-    n_val = int(len(dataset) * val_percent)
-    n_train = len(dataset) - n_val
-    # TODO: Il validation set dovrebbe avere il 10% di ogni classe e non il 10% del totale altrimenti verrebbe sbilanciato
-    train_set, val_set = random_split(dataset, [n_train, n_val])
-
-    # Loading dataset
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True,
-                            drop_last=True)
+    batch_size = train_loader.batch_size
 
     # Logging for TensorBoard
-    writer = SummaryWriter(comment=f'LR_{lr}_BS_{batch_size}_OPT_{type(optimizer).__name__}')  # does optimizer.lr work?
+    writer = SummaryWriter(comment=f'LR_{optimizer.lr}_BS_{batch_size}_OPT_{type(optimizer).__name__}')  # does optimizer.lr work? we're gonne find out
     global_step = 0
 
+    ### ERROR: n_train e n_val? ###
     logging.info(f'''Starting training:
         Epochs:             {max_epochs}
         Batch size:         {batch_size}
-        Learning rate:      {lr}
+        Learning rate:      {optimizer.lr}
         Training size:      {n_train}
         Validation size:    {n_val}
         Device:             {device.type}
@@ -92,7 +61,6 @@ def train(model,
     def criterion(pred, true):
         return torch.div(nn.BCELoss()(pred, true), 256 * 256)  # L = (1/(H*W)) * BCELoss
         # TypeError: unsupported operand type(s) for /: 'BCELoss' and 'int'
-        # Ma poi, funziona scritto così? Sembra più una funzione assegnata a una variabile
 
     last_epoch_val_score = 0
     for epoch in range(max_epochs):
@@ -101,7 +69,7 @@ def train(model,
         # epoch(batch_size, train_samples)
 
         # TODO
-        with tqdm.tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{max_epochs}', unit='img') as bar:
+        with tqdm.tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{max_epochs}', unit='img', disable=not verbose) as bar:
             bar.set_description(f'train loss')
 
             for batch in train_loader:
@@ -130,18 +98,21 @@ def train(model,
 
                 bar.update(queries.shape[0])
                 global_step += 1
-                if n_train % batch_size == 0: 
-                    n_batch = n_train // batch_size
-                else:
-                    n_batch = n_train // batch_size + 1
-                len(train_loader)
+                
+                # if n_train % batch_size == 0: 
+                #     n_batch = n_train // batch_size
+                # else:
+                #     n_batch = n_train // batch_size + 1
+                
+                ### DOMANDA: Dove lo volevamo usare? ###
+                ### ALTRA DOMANDA: Non conviene farlo fuori dai cicli? ###
+                n_batch = len(train_loader)
                 # Deve farlo sia in mezzo ai batch che a fine epoca. Modifica la condizione dell'if
-                if global_step % (n_train // (10 * batch_size)) == 0:
+                if global_step % (n_train // (10 * batch_size)) == 0 or global_step == n_batch:
                     for tag, value in model.named_parameters():
                         tag = tag.replace('.', '/')
                         writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                         writer.add_histogram('grads/' + tag, value.grad.cpu().numpy(), global_step)
-                    val_score = eval(model, val_loader, device)
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
                     writer.add_images('query_images', queries, global_step)
@@ -149,21 +120,25 @@ def train(model,
                     writer.add_images('masks/true', true_masks, global_step)
                     writer.add_images('masks/pred', pred_masks, global_step)
 
-            if save_cp and val_score > last_epoch_val_score:
-                try:
-                    os.mkdir()
-                    logging.info('Created checkpoint directory')
-                except OSError:
-                    pass
-                model_files = [f for f in os.listdir(checkpoint_dir) if os.path.isfile(os.path.join(checkpoint_dir, f))]
-                torch.save(model.state_dict(),
-                           checkpoint_dir + f'CP_epoch{epoch + 1}.pt')
-                for model_file in model_files:
-                    os.remove(f'{checkpoint_dir}{model_file}')
-                logging.info(f'Checkpoint {epoch + 1} saved!')
-                last_epoch_val_score = val_score
+            # TODO: Se save_cp è false e non viene cambiato il val_split di default non va in train il 10% del dataset. Si potrebbe fare in modo che non sia così
+            if save_cp:
+                val_score = eval(model, val_loader, device, bbox=False, verbose)
+                if val_score > last_epoch_val_score:
+                    try:
+                        os.mkdir()
+                        logging.info('Created checkpoint directory')
+                    except OSError: # Maybe FileExistsError ?
+                        pass
+                    model_files = [f for f in os.listdir(checkpoint_dir) if os.path.isfile(os.path.join(checkpoint_dir, f))]
+                    torch.save(model.state_dict(),
+                            checkpoint_dir + f'CP_epoch{epoch + 1}.pt')
+                    for model_file in model_files:
+                        os.remove(f'{checkpoint_dir}{model_file}')
+                    logging.info(f'Checkpoint {epoch + 1} saved!')
+                    last_epoch_val_score = val_score
 
-            writer.close()
+    writer.close()
+    torch.save(model.state_dict(), model_path)
 
         # # WIP
         # # Launches evaluation on the model every evaluate_every steps.
@@ -193,12 +168,15 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset',
                         choices=ALL_DATASET_NAMES,
-                        help="Dataset in {}".format(ALL_DATASET_NAMES),
-                        required=True
+                        default="FlickrLogos-32",
+                        type=str,
+                        help="Dataset in {}".format(ALL_DATASET_NAMES)
                         )
 
     parser.add_argument('--model',
                         choices=ALL_MODEL_NAMES,
+                        default="LogoDetection",
+                        type=str,
                         help="Model in {}".format(ALL_MODEL_NAMES)
                         )
 
@@ -272,7 +250,6 @@ def get_args():
     parser.add_argument('--batch_norm',
                         default=False,
                         type=bool,
-                        required=False,
                         help="If True, apply batch normalization",
                         )
 
@@ -280,41 +257,67 @@ def get_args():
                         type=str,
                         default='A',
                         help="VGG architecture config",
-                        required=False
                         )
 
     parser.add_argument('--step_eval',
                         type=int,
                         default=0,
                         help="Enables automatic evaluation checks every X step",
-                        required=False
                         )
 
     parser.add_argument('--val_split',
                         type=float,
                         default=0.1,
                         help="Forces the validation subset to be split according to the set value. Must a value in the [0-1] or the sofware WILL break",
-                        required=False
                         )
+
+    parser.add_argument('--save_cp',
+                        type=bool,
+                        default=True,
+                        help="If True, saves model checkponts",
+                        ) 
 
     return parser.parse_args()
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    # TODO: Add filename
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s: %(message)s")
     args = get_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    # TODO Modularize paths with respect to the current Dataset
-    imgs_dir = os.path.abspath("data/dataset/FlickrLogos-v2/classes/jpg")
-    masks_dir = os.path.abspath("data/dataset/FlickrLogos-v2/classes/masks")
-    checkpoint_dir = os.path.abspath("checkpoints")
+    # Modularized paths with respect to the current Dataset
+    imgs_dir = config_list['datasets'][args.dataset]['images']
+    masks_dir = config_list['datasets'][args.dataset]['masks']
+    checkpoint_dir = config_list['models'][args.model]['train_cp']
 
-    model_path = config_list['models']['LogoDetection']['path'] + "_".join(["LogoDetection", args.dataset]) + ".pt"
+    model_path = config_list['models'][args.model]['paths']['model']+ "_".join([args.model, args.dataset]) + ".pt"
 
-    # print("Loading %s dataset..." % args.dataset)
-    # dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir)
+    print("Loading %s dataset..." % args.dataset)
+    # you can delete this "save_to_disk" to preserve the ssd :like:
+    dataset = BasicDataset(imgs_dir, masks_dir, save_to_disk=False)
+
+    # Optimizer selection
+    # build all the supported optimizers using the passed params (learning rate and decays if Adam)
+    supported_optimizers = {
+        'Adam': optim.Adam(params=model.parameters(), lr=args.learning_rate, betas=(args.decay1, args.decay2),
+                           weight_decay=args.weight_decay),
+        'SGD': optim.SGD(params=model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    }
+    # Choose which Torch Optimizer object to use, based on the passed name
+    optimizer = supported_optimizers[args.optimizer]
+
+    # Splitting dataset
+    n_val = int(len(dataset) * args.val_split)
+    n_train = len(dataset) - n_val
+    # TODO: Il validation set dovrebbe avere il 10% di ogni classe e non il 10% del totale altrimenti verrebbe sbilanciato
+    train_set, val_set = random_split(dataset, [n_train, n_val])
+
+    # Loading dataset
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True,
+                            drop_last=True)
 
     # Change here to adapt your data
     print("Initializing model...")
@@ -323,28 +326,22 @@ if __name__ == '__main__':
     # stiamo dando ad "args.load" due compiti, quello di dirci il path e quello di dirci se caricare vecchi checkpoint
     if args.load is not None:
         model.load_state_dict(
-            torch.load(model_path, map_location=device)
+            torch.load(args.load, map_location=device)
         )
-        logging.info(f'Model loaded from {model_path}')
+        logging.info(f'Model loaded from {args.load}')
     model.to(device=device)
 
     try:
         train(model=model,
               device=device,
-              batch_size=args.batch_size,
+              train_loader=train_loader,
+              val_loader=val_loader,
               max_epochs=args.max_epochs,
-              #   save_path=args.save_path,
-              evaluate_every=args.step_eval,
-              optimizer=args.optimizer,
-              lr=args.learning_rate,
-              weight_decay=args.weight_decay,
-              decay_adam_1=args.decay1,
-              decay_adam_2=args.decay2,
-              label_smooth=args.label_smooth,
+              optimizer=optimizer,
               verbose=args.verbose,
               checkpoint_dir=checkpoint_dir,
-              save_cp=True,
-              val_percent=args.val_split
+              model_path=model_path,
+              save_cp=args.save_cp,
               )
     except KeyboardInterrupt:
         torch.save(model.state_dict(), 'INTERRUPTED.ph')
