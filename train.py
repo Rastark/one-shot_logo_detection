@@ -45,14 +45,14 @@ def train(model,
     batch_size = train_loader.batch_size
 
     # Logging for TensorBoard
-    writer = SummaryWriter(comment=f'LR_{optimizer.lr}_BS_{batch_size}_OPT_{type(optimizer).__name__}')  # does optimizer.lr work? we're gonne find out
+    writer = SummaryWriter(comment=f'LR__BS_{batch_size}_OPT_{type(optimizer).__name__}')  # does optimizer.lr work? we're gonne find out
     global_step = 0
 
     ### ERROR: n_train e n_val? ###
     logging.info(f'''Starting training:
         Epochs:             {max_epochs}
         Batch size:         {batch_size}
-        Learning rate:      {optimizer.lr}
+        Learning rate:      
         Training size:      {n_train}
         Validation size:    {n_val}
         Device:             {device.type}
@@ -122,7 +122,7 @@ def train(model,
 
             # TODO: Se save_cp è false e non viene cambiato il val_split di default non va in train il 10% del dataset. Si potrebbe fare in modo che non sia così
             if save_cp:
-                val_score = eval(model, val_loader, device, bbox=False, verbose)
+                val_score = eval(model, val_loader, device, bbox=False, verbose=True)
                 if val_score > last_epoch_val_score:
                     try:
                         os.mkdir()
@@ -130,7 +130,8 @@ def train(model,
                     except OSError: # Maybe FileExistsError ?
                         pass
                     model_files = [f for f in os.listdir(checkpoint_dir) if os.path.isfile(os.path.join(checkpoint_dir, f))]
-                    torch.save(model.state_dict(),
+                    torch.save(model.state_dict()
+                    ,
                             checkpoint_dir + f'CP_epoch{epoch + 1}.pt')
                     for model_file in model_files:
                         os.remove(f'{checkpoint_dir}{model_file}')
@@ -288,25 +289,15 @@ if __name__ == '__main__':
     logging.info(f'Using device {device}')
 
     # Modularized paths with respect to the current Dataset
-    imgs_dir = config_list['datasets'][args.dataset]['images']
-    masks_dir = config_list['datasets'][args.dataset]['masks']
-    checkpoint_dir = config_list['models'][args.model]['train_cp']
+    imgs_dir = config_list['datasets'][args.dataset]['paths']['images']
+    masks_dir = config_list['datasets'][args.dataset]['paths']['masks']
+    checkpoint_dir = config_list['models'][args.model]['paths']['train_cp']
 
     model_path = config_list['models'][args.model]['paths']['model']+ "_".join([args.model, args.dataset]) + ".pt"
 
     print("Loading %s dataset..." % args.dataset)
     # you can delete this "save_to_disk" to preserve the ssd :like:
-    dataset = BasicDataset(imgs_dir, masks_dir, save_to_disk=False)
-
-    # Optimizer selection
-    # build all the supported optimizers using the passed params (learning rate and decays if Adam)
-    supported_optimizers = {
-        'Adam': optim.Adam(params=model.parameters(), lr=args.learning_rate, betas=(args.decay1, args.decay2),
-                           weight_decay=args.weight_decay),
-        'SGD': optim.SGD(params=model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-    }
-    # Choose which Torch Optimizer object to use, based on the passed name
-    optimizer = supported_optimizers[args.optimizer]
+    dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir, dataset_name=args.dataset)
 
     # Splitting dataset
     n_val = int(len(dataset) * args.val_split)
@@ -323,6 +314,17 @@ if __name__ == '__main__':
     print("Initializing model...")
     model = LogoDetection(batch_norm=args.batch_norm,
                           vgg_cfg=args.vgg_cfg)
+    
+    # Optimizer selection
+    # build all the supported optimizers using the passed params (learning rate and decays if Adam)
+    supported_optimizers = {
+        'Adam': optim.Adam(params=model.parameters(), lr=args.learning_rate, betas=(args.decay1, args.decay2),
+                           weight_decay=args.weight_decay),
+        'SGD': optim.SGD(params=model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    }
+    # Choose which Torch Optimizer object to use, based on the passed name
+    optimizer = supported_optimizers[args.optimizer]
+
     # stiamo dando ad "args.load" due compiti, quello di dirci il path e quello di dirci se caricare vecchi checkpoint
     if args.load is not None:
         model.load_state_dict(

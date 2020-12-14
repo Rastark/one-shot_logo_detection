@@ -79,22 +79,22 @@ class LogoDetection(nn.Module):
 
         x4 = self.one_conv4(x4)
         x = torch.cat((x, x4), dim=1)
-        del x4
+        # del x4
         x = self.up2(x)
 
         x3 = self.one_conv3(x3)
         x = torch.cat((x, x3), dim=1)
-        del x3
+        # del x3
         x = self.up3(x)
 
         x2 = self.one_conv2(x2)
         x = torch.cat((x, x2), dim=1)
-        del x2
+        # del x2
         x = self.up4(x)
 
         x1 = self.one_conv1(x1)
         x = torch.cat((x, x1), dim=1)
-        del x1
+        # del x1
         x = self.up5(x)
 
         output = self.output_layer(x)

@@ -33,9 +33,9 @@ class BasicDataset(Dataset):
         assert mask_image_dim > 1, 'The dimension of mask and image must be higher than 1'
         assert query_dim > 1, 'The dimension of query image must be higher than 1'
 
-        assert not os.path.isdir(imgs_dir), f"Bad path for images directory: {imgs_dir}"
+        assert os.path.isdir(imgs_dir), f"Bad path for images directory: {imgs_dir}"
 
-        assert not os.path.isdir(masks_dir), f"Bad path for masks directory: {masks_dir}"
+        assert os.path.isdir(masks_dir), f"Bad path for masks directory: {masks_dir}"
 
         if save_to_disk:
             # create processed image's directory, if not exists yet
@@ -187,7 +187,7 @@ class BasicDataset(Dataset):
         # pil_resized_mask.save('mask.jpg')
 
         # return the triplet (Dq, Dt, Dm) where Dq is the query image, Dt is the target image and Dm is the mask image
-        return create_triplet_without_torch_representation(pil_resized_query_img,
+        return create_triplet_with_torch_representation(pil_resized_query_img,
                                                            pil_resized_target_img,
                                                            pil_resized_mask)
 
@@ -331,20 +331,20 @@ def to_pytorch(image):
 
 
 # dude, the name says all. just read it :/
-def create_triplet_without_torch_representation(pil_query, pil_target, pil_mask):
-    # return [np.array(pil_query), np.array(pil_target), np.array(pil_mask)]
-    # return np.array([np.array(pil_query), np.array(pil_target), np.array(pil_mask)])
-    return {
-        "query": np.array(pil_query),
-        "target": np.array(pil_target),
-        "mask": np.array(pil_mask)
-    }
-
-# def create_triplet_with_torch_representation(pil_query, pil_target, pil_mask):
-#     # return [to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)]
-#     # return np.array([to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)])
+# def create_triplet_without_torch_representation(pil_query, pil_target, pil_mask):
+#     # return [np.array(pil_query), np.array(pil_target), np.array(pil_mask)]
+#     # return np.array([np.array(pil_query), np.array(pil_target), np.array(pil_mask)])
 #     return {
-#         "query": to_pytorch(pil_query),
-#         "target": to_pytorch(pil_target),
-#         "mask": to_pytorch(pil_mask)
+#         "query": np.array(pil_query),
+#         "target": np.array(pil_target),
+#         "mask": np.array(pil_mask)
 #     }
+
+def create_triplet_with_torch_representation(pil_query, pil_target, pil_mask):
+    # return [to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)]
+    # return np.array([to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)])
+    return {
+        "query": to_pytorch(pil_query),
+        "target": to_pytorch(pil_target),
+        "mask": to_pytorch(pil_mask)
+    }
