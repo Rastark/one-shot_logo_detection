@@ -22,14 +22,21 @@ class BasicDataset(Dataset):
     TARGET_IMAGE_BBOX_PATH = "target_image_bbox_path"
 
     def __init__(self, imgs_dir: str, masks_dir: str, dataset_name: str, mask_image_dim: int = 256, query_dim: int = 64,
-                 mask_suffix: str = '.bboxes.txt', save_to_disk: bool = False):
-        self.imgs_dir = imgs_dir
-        self.masks_dir = masks_dir
-        self.processed_img_dir = str(imgs_dir[:imgs_dir.rindex(os.path.sep) + 1]) + "preprocessed"
+                 bbox_suffix: str = '.bboxes.txt', save_to_disk: bool = False, skip_bbox_lines: int = 0):
+        if not imgs_dir.strip()[-1:] == os.path.sep:
+            self.imgs_dir = imgs_dir.strip()
+        else:
+            self.imgs_dir = imgs_dir.strip()[:-1]
+        if not masks_dir.strip()[-1:] == os.path.sep:
+            self.masks_dir = masks_dir.strip()
+        else:
+            self.masks_dir = masks_dir.strip()[:-1]
+        self.processed_img_dir = str(self.imgs_dir[:self.imgs_dir.rindex(os.path.sep) + 1]) + "preprocessed"
         self.mask_img_dim = mask_image_dim
         self.query_dim = query_dim
-        self.mask_suffix = mask_suffix
+        self.bbox_suffix = bbox_suffix
         self.save_to_disk = save_to_disk
+        self.skip_bbox_lines = skip_bbox_lines
         assert mask_image_dim > 1, 'The dimension of mask and image must be higher than 1'
         assert query_dim > 1, 'The dimension of query image must be higher than 1'
 
@@ -58,9 +65,39 @@ class BasicDataset(Dataset):
         # TODO: Fai in modo che preprocess calcoli sia la maschera che il bbox e poi, in base al dataset, togline uno
         if dataset_name == "FlickrLogos-32":
             self.flickrlogos32_load()
+        elif dataset_name == "TopLogos-10":
+            self.logodetection_load()
 
     def __len__(self):
         return len(self.images_path)
+
+    def logodetection_load(self):
+
+        # get query image
+        bbox_path = None
+        for bbox_paths, _, bbox_list in os.walk(self.masks_dir):
+            for bbox_file in bbox_list:
+                if self.bbox_suffix in bbox_file:
+                    bbox_path = os.path.join(bbox_paths, bbox_file)
+                    break
+            if bbox_path:
+                break
+        query_full_image_path = self.imgs_dir + os.path.sep + bbox_file[:bbox_file.index(self.bbox_suffix)]
+
+        # get target images
+        for target_images_paths, _, target_images_list in os.walk(self.imgs_dir):
+            for target_image_name in target_images_list:
+                target_image_root_path, target_image_extension = os.path.splitext(
+                    os.path.join(target_images_paths, target_image_name))
+                if target_image_extension == ".jpg":
+                    self.images_path.append(
+                        {self.TARGET_IMAGE_PATH: os.path.join(target_images_paths, target_image_name),
+                         self.MASK_IMAGE_PATH: None,
+                         self.BBOX_PATH: bbox_path,
+                         self.TARGET_IMAGE_BBOX_PATH: query_full_image_path})
+
+        # print(self.images_path)
+        # print(len(self.images_path))
 
     def flickrlogos32_load(self):
 
@@ -97,7 +134,7 @@ class BasicDataset(Dataset):
                     # TODO: Non salvare tutto il path ma solo "classe/file"
                     x = {self.TARGET_IMAGE_PATH: os.path.join(target_images_paths, target_image_name),
                          self.MASK_IMAGE_PATH: masks_dict[target_image_name],
-                         self.BBOX_PATH: f'{masks_dict[target_image_name][:masks_dict[target_image_name].rindex(".mask")]}{self.mask_suffix}'}
+                         self.BBOX_PATH: f'{masks_dict[target_image_name][:masks_dict[target_image_name].rindex(".mask")]}{self.bbox_suffix}'}
                     try:
                         image_path_element[target_image_class].append(x)
                     except KeyError:
@@ -129,8 +166,8 @@ class BasicDataset(Dataset):
     # stretch, crop and stretch again the query image
     # stretch the mask image
     @classmethod
-    def preprocess(cls, target_img_path: str, bbox_path: str, query_full_img_path: str, img_dim: int = 256,
-                   query_img_dim: int = 64, mask_img_path: str = None) -> dict:
+    def preprocess(cls, target_img_path: str, bbox_path: str, query_full_img_path: str, skip_bbox_lines: int = 0,
+                   img_dim: int = 256, query_img_dim: int = 64, mask_img_path: str = None) -> dict:
 
         # Target image
 
@@ -153,7 +190,7 @@ class BasicDataset(Dataset):
         with open(bbox_path) as bbox_file:
             # read only the first line of the bbox file
             bbox_lines = bbox_file.readlines()
-            first_line_bbox = bbox_lines[1].split(' ')
+            first_line_bbox = bbox_lines[1 - skip_bbox_lines].split(' ')
             # check if we correctly skipped the first line of the file, the one with no number,
             # and if all the elements are numeric, like every coordinate should be ;)
             if first_line_bbox[0].isnumeric() and first_line_bbox[1].isnumeric() and \
@@ -182,12 +219,12 @@ class BasicDataset(Dataset):
             pil_resized_mask = None
 
         # just to test if everything works. don't look at these :)
-        # pil_resized_target_image.save('target.jpg')
-        # pil_resized_query_image.save('query.jpg')
+        # pil_resized_target_img.save('target.jpg')
+        # pil_resized_query_img.save('query.jpg')
         # pil_resized_mask.save('mask.jpg')
 
         # return the triplet (Dq, Dt, Dm) where Dq is the query image, Dt is the target image and Dm is the mask image
-        return create_triplet_with_torch_representation(pil_resized_query_img,
+        return create_triplet_without_torch_representation(pil_resized_query_img,
                                                            pil_resized_target_img,
                                                            pil_resized_mask)
 
@@ -288,7 +325,8 @@ class BasicDataset(Dataset):
                                               bbox_path=self.images_path[item_index][self.BBOX_PATH],
                                               query_full_img_path=self.images_path[item_index][
                                                   self.TARGET_IMAGE_BBOX_PATH],
-                                              mask_img_path=self.images_path[item_index][self.MASK_IMAGE_PATH])
+                                              mask_img_path=self.images_path[item_index][self.MASK_IMAGE_PATH],
+                                              skip_bbox_lines=self.skip_bbox_lines)
                 if self.save_to_disk:
                     self.store_hdf5_file_with_compression(return_dict, item_index)
                 break
@@ -331,20 +369,20 @@ def to_pytorch(image):
 
 
 # dude, the name says all. just read it :/
-# def create_triplet_without_torch_representation(pil_query, pil_target, pil_mask):
-#     # return [np.array(pil_query), np.array(pil_target), np.array(pil_mask)]
-#     # return np.array([np.array(pil_query), np.array(pil_target), np.array(pil_mask)])
-#     return {
-#         "query": np.array(pil_query),
-#         "target": np.array(pil_target),
-#         "mask": np.array(pil_mask)
-#     }
-
-def create_triplet_with_torch_representation(pil_query, pil_target, pil_mask):
-    # return [to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)]
-    # return np.array([to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)])
+def create_triplet_without_torch_representation(pil_query, pil_target, pil_mask):
+    # return [np.array(pil_query), np.array(pil_target), np.array(pil_mask)]
+    # return np.array([np.array(pil_query), np.array(pil_target), np.array(pil_mask)])
     return {
-        "query": to_pytorch(pil_query),
-        "target": to_pytorch(pil_target),
-        "mask": to_pytorch(pil_mask)
+        "query": np.array(pil_query),
+        "target": np.array(pil_target),
+        "mask": np.array(pil_mask)
     }
+
+# def create_triplet_with_torch_representation(pil_query, pil_target, pil_mask):
+#     # return [to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)]
+#     # return np.array([to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)])
+#     return {
+#         "query": to_pytorch(pil_query),
+#         "target": to_pytorch(pil_target),
+#         "mask": to_pytorch(pil_mask)
+#     }

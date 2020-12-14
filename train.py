@@ -19,7 +19,7 @@ from eval import eval
 
 # todo: when we add more models, we should move these variables to another location
 MODEL_HOME = os.path.abspath("./stored_models/")
-ALL_MODEL_NAMES = ["LogoDetection"]
+ALL_MODEL_NAMES = ["TopLogos-10"]
 ALL_DATASET_NAMES = ["FlickrLogos-32"]
 
 with open(os.path.abspath("./config/config.yaml")) as config:
@@ -98,12 +98,12 @@ def train(model,
 
                 bar.update(queries.shape[0])
                 global_step += 1
-                
+
                 # if n_train % batch_size == 0: 
                 #     n_batch = n_train // batch_size
                 # else:
                 #     n_batch = n_train // batch_size + 1
-                
+
                 ### DOMANDA: Dove lo volevamo usare? ###
                 ### ALTRA DOMANDA: Non conviene farlo fuori dai cicli? ###
                 n_batch = len(train_loader)
@@ -147,7 +147,7 @@ def train(model,
         # if evaluate_every > 0 and valid_samples is not None and (e + 1) % evaluate_every == 0:
         #     self.model.eval()
         #     with torch.no_grad():
-        #         mrr, h1 = self.evaluator.eval(samples=valid_samples, write_output= False) 
+        #         mrr, h1 = self.evaluator.eval(samples=valid_samples, write_output= False)
 
         #     # Metrics printing
         #     print("\tValidation: %f" % h1)
@@ -276,7 +276,7 @@ def get_args():
                         type=bool,
                         default=True,
                         help="If True, saves model checkponts",
-                        ) 
+                        )
 
     return parser.parse_args()
 
@@ -314,7 +314,7 @@ if __name__ == '__main__':
     print("Initializing model...")
     model = LogoDetection(batch_norm=args.batch_norm,
                           vgg_cfg=args.vgg_cfg)
-    
+
     # Optimizer selection
     # build all the supported optimizers using the passed params (learning rate and decays if Adam)
     supported_optimizers = {
