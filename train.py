@@ -89,7 +89,7 @@ def train(model,
                 logging.info(f"Mask correctly predicted")
                 # print(pred_masks.shape)
                 loss = criterion(pred_masks, true_masks)
-                logging.info(f"Loss: {loss}")
+                logging.info(f"Loss: {loss.detach().item()}")
                 epoch_loss += loss.detach().item()  # is the .detach() needed?
 
                 # TensorBoard logging
