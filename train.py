@@ -131,15 +131,13 @@ def train(model,
                 val_score = eval(model, val_loader, device, bbox=False, verbose=True)
                 if val_score > last_epoch_val_score:
                     try:
-                        os.mkdir()
+                        os.mkdir(checkpoint_dir)
                         logging.info('Created checkpoint directory')
                     except OSError:  # Maybe FileExistsError ?
                         pass
                     model_files = [f for f in os.listdir(checkpoint_dir) if
                                    os.path.isfile(os.path.join(checkpoint_dir, f))]
-                    torch.save(model.state_dict()
-                               ,
-                               checkpoint_dir + f'CP_epoch{epoch + 1}.pt')
+                    torch.save(model.state_dict(), checkpoint_dir + f'CP_epoch{epoch + 1}.pt')
                     for model_file in model_files:
                         os.remove(f'{checkpoint_dir}{model_file}')
                     logging.info(f'Checkpoint {epoch + 1} saved!')

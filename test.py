@@ -129,6 +129,9 @@ if __name__ == '__main__':
     # Modularized paths with respect to the current Dataset
     imgs_dir = config_list['datasets'][args.dataset]['images']
     masks_dir = config_list['datasets'][args.dataset]['masks']
+    # TODO: Controlla che ste due liste hanno le stesse sottocartelle
+    imgs_classes = [f.name for f in os.scandir(imgs_dir) if f.is_dir()]
+    mask_classes = [f.name for f in os.scandir(masks_dir) if f.is_dir()]
     # checkpoint_dir = config_list['models'][args.model]['train_cp']
 
     model_path = config_list['models'][args.model]['paths']['model']+ "_".join([args.model, args.dataset]) + ".pt"
@@ -147,21 +150,25 @@ if __name__ == '__main__':
     logging.info(f'Model loaded from {model_path}')
     model.to(device=device)
 
-    dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir)
-    test_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    # Neo, enter in Metrics
+    metrics = []
 
-    try:
-        test(model=model,
-            device=device,
-            dataset=test_loader,
-            batch_size=args.batch_size,
-            verbose=args.verbose
-            )
-    except KeyboardInterrupt:
-        # torch.save(model.state_dict(), 'INTERRUPTED.ph')
-        # logging.info('Interrupt saved')
-        logging.info("Test interrupted")
+    for img_class_idx, img_class_path in enumerate(imgs_classes):
+        dataset = BasicDataset(imgs_dir=f"{imgs_dir}{os.path.sep}{img_class_path}", masks_dir=f"{masks_dir}{os.path.sep}{masks_dir[img_class_idx]}", dataset_name=args.dataset, skip_bbox_lines=1)
+        test_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+
         try:
-            sys.exit(0)
-        except SystemExit:
-            os._exit(0)
+            metrics.append(test(model=model,
+                                device=device,
+                                dataset=test_loader,
+                                batch_size=args.batch_size,
+                                verbose=args.verbose
+                                ))
+        except KeyboardInterrupt:
+            # torch.save(model.state_dict(), 'INTERRUPTED.ph')
+            # logging.info('Interrupt saved')
+            logging.info("Test interrupted")
+            try:
+                sys.exit(0)
+            except SystemExit:
+                os._exit(0)

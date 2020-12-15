@@ -46,10 +46,11 @@ def eval(model,
             queries, targets, truth = batch['query'], batch['target'], batch[truth_type]
             queries = queries.to(device=device, dtype=torch.float32)
             targets = targets.to(device=device, dtype=torch.float32)
-            truth = truth.to(device=device, dtype=torch.float32)
+            # truth = truth.to(device=device, dtype=torch.float32)
 
             with torch.no_grad():
                 pred_masks = model(queries, targets)
+                pred_masks.cpu()
                 # assunzione: gli indici della true e pred masks sono gli stessi
                 for mask_index in range(pred_masks.shape[0]):
                     pred_mask = np.asarray(pred_masks[mask_index])
