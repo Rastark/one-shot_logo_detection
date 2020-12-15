@@ -25,6 +25,7 @@ ALL_DATASET_NAMES = ["FlickrLogos-32", "TopLogos-10"]
 with open(os.path.abspath("./config/config.yaml")) as config:
     config_list = yaml.load(config, Loader=yaml.FullLoader)
 
+
 # # Appl.load_aly Gaussian normalization to the model
 # def weights_init(model):
 #     if isinstance(model, nn.Module):
@@ -41,11 +42,11 @@ def train(model,
           model_path,
           save_cp,
           ):
-
     batch_size = train_loader.batch_size
 
     # Logging for TensorBoard
-    writer = SummaryWriter(comment=f'LR__BS_{batch_size}_OPT_{type(optimizer).__name__}')  # does optimizer.lr work? we're gonne find out
+    writer = SummaryWriter(
+        comment=f'LR__BS_{batch_size}_OPT_{type(optimizer).__name__}')  # does optimizer.lr work? we're gonne find out
     global_step = 0
 
     ### ERROR: n_train e n_val? ###
@@ -88,6 +89,7 @@ def train(model,
                 logging.info(f"Mask correctly predicted")
                 # print(pred_masks.shape)
                 loss = criterion(pred_masks, true_masks)
+                logging.info(f"Loss: {loss}")
                 epoch_loss += loss.detach().item()  # is the .detach() needed?
 
                 # TensorBoard logging
@@ -131,12 +133,13 @@ def train(model,
                     try:
                         os.mkdir()
                         logging.info('Created checkpoint directory')
-                    except OSError: # Maybe FileExistsError ?
+                    except OSError:  # Maybe FileExistsError ?
                         pass
-                    model_files = [f for f in os.listdir(checkpoint_dir) if os.path.isfile(os.path.join(checkpoint_dir, f))]
+                    model_files = [f for f in os.listdir(checkpoint_dir) if
+                                   os.path.isfile(os.path.join(checkpoint_dir, f))]
                     torch.save(model.state_dict()
-                    ,
-                            checkpoint_dir + f'CP_epoch{epoch + 1}.pt')
+                               ,
+                               checkpoint_dir + f'CP_epoch{epoch + 1}.pt')
                     for model_file in model_files:
                         os.remove(f'{checkpoint_dir}{model_file}')
                     logging.info(f'Checkpoint {epoch + 1} saved!')
@@ -145,21 +148,21 @@ def train(model,
     writer.close()
     torch.save(model.state_dict(), model_path)
 
-        # # WIP
-        # # Launches evaluation on the model every evaluate_every steps.
-        # # We need to change to appropriate evaluation metrics.
-        # if evaluate_every > 0 and valid_samples is not None and (e + 1) % evaluate_every == 0:
-        #     self.model.eval()
-        #     with torch.no_grad():
-        #         mrr, h1 = self.evaluator.eval(samples=valid_samples, write_output= False)
+    # # WIP
+    # # Launches evaluation on the model every evaluate_every steps.
+    # # We need to change to appropriate evaluation metrics.
+    # if evaluate_every > 0 and valid_samples is not None and (e + 1) % evaluate_every == 0:
+    #     self.model.eval()
+    #     with torch.no_grad():
+    #         mrr, h1 = self.evaluator.eval(samples=valid_samples, write_output= False)
 
-        #     # Metrics printing
-        #     print("\tValidation: %f" % h1)
+    #     # Metrics printing
+    #     print("\tValidation: %f" % h1)
 
-        # if save_path is not None:
-        #     print("\tSaving model...")
-        #     torch.save(self.model.state_dict(), save_path)
-        # print("\tDone.")
+    # if save_path is not None:
+    #     print("\tSaving model...")
+    #     torch.save(self.model.state_dict(), save_path)
+    # print("\tDone.")
 
 
 # print("\nEvaluating model...")
@@ -297,7 +300,7 @@ if __name__ == '__main__':
     masks_dir = config_list['datasets'][args.dataset]['paths']['masks']
     checkpoint_dir = config_list['models'][args.model]['paths']['train_cp']
 
-    model_path = config_list['models'][args.model]['paths']['model']+ "_".join([args.model, args.dataset]) + ".pt"
+    model_path = config_list['models'][args.model]['paths']['model'] + "_".join([args.model, args.dataset]) + ".pt"
 
     print("Loading %s dataset..." % args.dataset)
     # you can delete this "save_to_disk" to preserve the ssd :like:
