@@ -21,16 +21,11 @@ class BasicDataset(Dataset):
     BBOX_PATH = "bbox_path"
     TARGET_IMAGE_BBOX_PATH = "target_image_bbox_path"
 
+    # TODO: Check if the values are empty
     def __init__(self, imgs_dir: str, masks_dir: str, dataset_name: str, mask_image_dim: int = 256, query_dim: int = 64,
                  bbox_suffix: str = '.bboxes.txt', save_to_disk: bool = False, skip_bbox_lines: int = 0):
-        if not imgs_dir.strip()[-1:] == os.path.sep:
-            self.imgs_dir = imgs_dir.strip()
-        else:
-            self.imgs_dir = imgs_dir.strip()[:-1]
-        if not masks_dir.strip()[-1:] == os.path.sep:
-            self.masks_dir = masks_dir.strip()
-        else:
-            self.masks_dir = masks_dir.strip()[:-1]
+        self.imgs_dir = fix_input_dir(imgs_dir)
+        self.masks_dir = fix_input_dir(masks_dir)
         self.processed_img_dir = str(self.imgs_dir[:self.imgs_dir.rindex(os.path.sep) + 1]) + "preprocessed"
         self.mask_img_dim = mask_image_dim
         self.query_dim = query_dim
@@ -66,38 +61,37 @@ class BasicDataset(Dataset):
         if dataset_name == "FlickrLogos-32":
             self.flickrlogos32_load()
         elif dataset_name == "TopLogos-10":
-            self.logodetection_load()
+            self.toplogos10_load()
 
     def __len__(self):
         return len(self.images_path)
 
-    def logodetection_load(self):
+    def toplogos10_load(self):
 
-        # get query image
+        # get bbox path
         bbox_path = None
         for bbox_paths, _, bbox_list in os.walk(self.masks_dir):
             for bbox_file in bbox_list:
                 if self.bbox_suffix in bbox_file:
-                    bbox_path = os.path.join(bbox_paths, bbox_file)
+                    bbox_path = get_class_file_path(bbox_paths, bbox_file)
                     break
             if bbox_path:
                 break
-        query_full_image_path = self.imgs_dir + os.path.sep + bbox_file[:bbox_file.index(self.bbox_suffix)]
 
-        # get target images
+        # get query image path
+        query_full_image_path = f"{bbox_path[:bbox_path.index(self.bbox_suffix)]}"
+
+        # get target images path and fill "self.images_path"
         for target_images_paths, _, target_images_list in os.walk(self.imgs_dir):
             for target_image_name in target_images_list:
                 target_image_root_path, target_image_extension = os.path.splitext(
                     os.path.join(target_images_paths, target_image_name))
                 if target_image_extension == ".jpg":
                     self.images_path.append(
-                        {self.TARGET_IMAGE_PATH: os.path.join(target_images_paths, target_image_name),
+                        {self.TARGET_IMAGE_PATH: get_class_file_path(target_images_paths, target_image_name),
                          self.MASK_IMAGE_PATH: None,
                          self.BBOX_PATH: bbox_path,
                          self.TARGET_IMAGE_BBOX_PATH: query_full_image_path})
-
-        # print(self.images_path)
-        # print(len(self.images_path))
 
     def flickrlogos32_load(self):
 
@@ -111,10 +105,8 @@ class BasicDataset(Dataset):
             for mask_file_name in masks_files:
                 _, mask_extension = os.path.splitext(os.path.join(masks_paths, mask_file_name))
                 if mask_extension == ".png" and "merged" in mask_file_name:
-                    # TODO: Non salvare tutto il path ma solo "classe/file"
-                    # mask_absolute_path = os.path.join(masks_path, mask_file_name)
-                    masks_dict[mask_file_name[:mask_file_name.rindex(".mask")]] = os.path.join(masks_paths,
-                                                                                               mask_file_name)
+                    masks_dict[mask_file_name[:mask_file_name.rindex(".mask")]] = get_class_file_path(masks_paths,
+                                                                                                      mask_file_name)
 
         # dict with every image of every class
         # key = class name
@@ -131,8 +123,7 @@ class BasicDataset(Dataset):
                 target_image_root_path, target_image_extension = os.path.splitext(
                     os.path.join(target_images_paths, target_image_name))
                 if target_image_extension == ".jpg" and "no-logo" not in target_image_root_path:
-                    # TODO: Non salvare tutto il path ma solo "classe/file"
-                    x = {self.TARGET_IMAGE_PATH: os.path.join(target_images_paths, target_image_name),
+                    x = {self.TARGET_IMAGE_PATH: get_class_file_path(target_images_paths, target_image_name),
                          self.MASK_IMAGE_PATH: masks_dict[target_image_name],
                          self.BBOX_PATH: f'{masks_dict[target_image_name][:masks_dict[target_image_name].rindex(".mask")]}{self.bbox_suffix}'}
                     try:
@@ -157,14 +148,11 @@ class BasicDataset(Dataset):
                                                  self.TARGET_IMAGE_BBOX_PATH: outer_target_image_path})
         print(f"You have {len(self.images_path)} triplets")
 
-    # TODO: Calcola la shape della tripletta ma non chiamarlo "shape"
-    def shape(self):
-        pass
-
     # preprocess the images. then save in file and return a list triplet [query image, target image, mask image]. how?
     # stretch the target image
     # stretch, crop and stretch again the query image
     # stretch the mask image
+    # TODO: Check if the values are empty
     @classmethod
     def preprocess(cls, target_img_path: str, bbox_path: str, query_full_img_path: str, skip_bbox_lines: int = 0,
                    img_dim: int = 256, query_img_dim: int = 64, mask_img_path: str = None) -> dict:
@@ -218,15 +206,24 @@ class BasicDataset(Dataset):
         else:
             pil_resized_mask = None
 
+        # get the size of the images
+        # print(f"query image dim: {pil_resized_query_img.size}")
+        # print(f"target image dim: {pil_resized_target_img.size}")
+        # if pil_resized_mask:
+        #     print(f"mask image dim: {pil_resized_mask.size}")
+
         # just to test if everything works. don't look at these :)
-        # pil_resized_target_img.save('target.jpg')
-        # pil_resized_query_img.save('query.jpg')
-        # pil_resized_mask.save('mask.jpg')
+        # if pil_resized_target_img:
+        #     pil_resized_target_img.save('target.jpg')
+        # if pil_resized_query_img:
+        #     pil_resized_query_img.save('query.jpg')
+        # if pil_resized_mask:
+        #     pil_resized_mask.save('mask.jpg')
 
         # return the triplet (Dq, Dt, Dm) where Dq is the query image, Dt is the target image and Dm is the mask image
-        return create_triplet_without_torch_representation(pil_resized_query_img,
-                                                           pil_resized_target_img,
-                                                           pil_resized_mask)
+        return create_triplet_with_torch_representation(pil_resized_query_img,
+                                                        pil_resized_target_img,
+                                                        pil_resized_mask)
 
     # def h5py_with_pytorch(self, pil_img, index, type):
     #     x = self.h5py_compression(to_pytorch(pil_img), index, type)
@@ -307,7 +304,7 @@ class BasicDataset(Dataset):
     #     return f'{file_name}.npz'
 
     def __getitem__(self, item_index):
-        print(f"Getting item {item_index}")
+        # print(f"Getting item {item_index}")
         # get the path of the preprocessed file, if exists
         mask_file_path = f'{self.processed_img_dir}{os.path.sep}{item_index}_mask.hdf5'
         query_file_path = f'{self.processed_img_dir}{os.path.sep}{item_index}_query.hdf5'
@@ -320,13 +317,13 @@ class BasicDataset(Dataset):
         for file in correct_order_triplet:
             if not os.path.exists(file):
                 # triplet = self.preprocess(item_index, self.images_path[item_index])
-                print(f"Preprocessing")
-                return_dict = self.preprocess(target_img_path=self.images_path[item_index][self.TARGET_IMAGE_PATH],
-                                              bbox_path=self.images_path[item_index][self.BBOX_PATH],
-                                              query_full_img_path=self.images_path[item_index][
-                                                  self.TARGET_IMAGE_BBOX_PATH],
-                                              mask_img_path=self.images_path[item_index][self.MASK_IMAGE_PATH],
-                                              skip_bbox_lines=self.skip_bbox_lines)
+                return_dict = self.preprocess(
+                    target_img_path=get_full_path(self.imgs_dir, self.images_path[item_index][self.TARGET_IMAGE_PATH]),
+                    bbox_path=get_full_path(self.masks_dir, self.images_path[item_index][self.BBOX_PATH]),
+                    query_full_img_path=get_full_path(self.imgs_dir,
+                                                      self.images_path[item_index][self.TARGET_IMAGE_BBOX_PATH]),
+                    mask_img_path=get_full_path(self.masks_dir, self.images_path[item_index][self.MASK_IMAGE_PATH]),
+                    skip_bbox_lines=self.skip_bbox_lines)
                 if self.save_to_disk:
                     self.store_hdf5_file_with_compression(return_dict, item_index)
                 break
@@ -356,33 +353,60 @@ class BasicDataset(Dataset):
 
 
 def to_pytorch(image):
-    image_np = np.array(image)
-    # mask image has only one channel, we need to explicit it
-    if len(image_np.shape) == 2:
-        image_np = np.expand_dims(image_np, axis=2)
-    # HWC to CHW for pytorch
-    img_trans = image_np.transpose((2, 0, 1))
-    if img_trans.max() > 1:
-        img_trans = img_trans / 255
-    return torch.from_numpy(img_trans).type(torch.FloatTensor)
-    # return img_trans
+    if image:
+        image_np = np.array(image)
+        # mask image has only one channel, we need to explicit it
+        if len(image_np.shape) == 2:
+            image_np = np.expand_dims(image_np, axis=2)
+        # HWC to CHW for pytorch
+        img_trans = image_np.transpose((2, 0, 1))
+        if img_trans.max() > 1:
+            img_trans = img_trans / 255
+        return torch.from_numpy(img_trans).type(torch.FloatTensor)
+        # return img_trans
+    else:
+        return None
 
 
 # dude, the name says all. just read it :/
-def create_triplet_without_torch_representation(pil_query, pil_target, pil_mask):
-    # return [np.array(pil_query), np.array(pil_target), np.array(pil_mask)]
-    # return np.array([np.array(pil_query), np.array(pil_target), np.array(pil_mask)])
+# def create_triplet_without_torch_representation(pil_query, pil_target, pil_mask):
+#     # return [np.array(pil_query), np.array(pil_target), np.array(pil_mask)]
+#     # return np.array([np.array(pil_query), np.array(pil_target), np.array(pil_mask)])
+#     return {
+#         "query": np.array(pil_query),
+#         "target": np.array(pil_target),
+#         "mask": np.array(pil_mask)
+#     }
+
+def create_triplet_with_torch_representation(pil_query, pil_target, pil_mask):
+    # return [to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)]
+    # return np.array([to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)])
     return {
-        "query": np.array(pil_query),
-        "target": np.array(pil_target),
-        "mask": np.array(pil_mask)
+        "query": to_pytorch(pil_query),
+        "target": to_pytorch(pil_target),
+        "mask": to_pytorch(pil_mask)
     }
 
-# def create_triplet_with_torch_representation(pil_query, pil_target, pil_mask):
-#     # return [to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)]
-#     # return np.array([to_pytorch(pil_query), to_pytorch(pil_target), to_pytorch(pil_mask)])
-#     return {
-#         "query": to_pytorch(pil_query),
-#         "target": to_pytorch(pil_target),
-#         "mask": to_pytorch(pil_mask)
-#     }
+
+def get_class_file_path(class_name, file_name):
+    class_file = f"{class_name[class_name.rindex(os.path.sep):]}{os.path.sep}{file_name}"
+    if os.path.sep not in class_file[0:2]:
+        class_file = f"{os.path.sep}{class_file}"
+    return class_file
+
+
+def get_full_path(root, file):
+    try:
+        if root[root.rindex(os.path.sep) + 1:].strip() == file[1:file.index(os.path.sep, 1)].strip():
+            path = f"{root[:root.rindex(os.path.sep)]}{file}"
+        else:
+            path = f"{root}{file}"
+        return path
+    except AttributeError:
+        return None
+
+
+def fix_input_dir(dir):
+    if not dir.strip()[-1:] == os.path.sep:
+        return dir.strip()
+    return dir.strip()[:-1]
