@@ -64,6 +64,7 @@ def train(model,
 
     last_epoch_val_score = 0
     for epoch in range(max_epochs):
+        logging.info(f"Epoch number {epoch}")
         model.train()  # set the model in training flag to True
         epoch_loss = 0  # resets the loss for the current epoch
         # epoch(batch_size, train_samples)
@@ -73,6 +74,7 @@ def train(model,
             bar.set_description(f'train loss')
 
             for batch in train_loader:
+                logging.info(f"Batch number {batch}")
                 queries = batch['query']  # Correct dimensions?
                 targets = batch['target']
                 true_masks = batch['mask']
@@ -81,7 +83,9 @@ def train(model,
                 targets = targets.to(device=device, dtype=torch.float32)
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
 
+                logging.info(f"Sending imgs to model")
                 pred_masks = model(queries, targets)
+                logging.info(f"Mask correctly predicted")
                 # print(pred_masks.shape)
                 loss = criterion(pred_masks, true_masks)
                 epoch_loss += loss.detach().item()  # is the .detach() needed?
@@ -283,7 +287,7 @@ def get_args():
 
 if __name__ == '__main__':
     # TODO: Add filename
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s: %(message)s", filename='oneshot.log')
     args = get_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
