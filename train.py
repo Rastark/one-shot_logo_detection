@@ -19,8 +19,8 @@ from eval import eval
 
 # todo: when we add more models, we should move these variables to another location
 MODEL_HOME = os.path.abspath("./stored_models/")
-ALL_MODEL_NAMES = ["TopLogos-10"]
-ALL_DATASET_NAMES = ["FlickrLogos-32"]
+ALL_MODEL_NAMES = ["LogoDetection"]
+ALL_DATASET_NAMES = ["FlickrLogos-32", "TopLogos-10"]
 
 with open(os.path.abspath("./config/config.yaml")) as config:
     config_list = yaml.load(config, Loader=yaml.FullLoader)
