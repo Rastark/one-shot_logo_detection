@@ -31,11 +31,11 @@ class LogoDetection(nn.Module):
         self.one_conv4 = OneOneConv(1024, 512)  # 512+512
 
         # Decoder steps
-        self.up1 = Upscaler(1536, 512) # 1024+512
-        self.up2 = Upscaler(1024, 256) # 512*2
+        self.up1 = Upscaler(1536, 512)  # 1024+512
+        self.up2 = Upscaler(1024, 256)  # 512*2
         self.up3 = Upscaler(512, 128)  # 256*2
-        self.up4 = Upscaler(256, 64)   # 128*2
-        self.up5 = Upscaler(128, 1)    # 64*2 
+        self.up4 = Upscaler(256, 64)  # 128*2
+        self.up5 = Upscaler(128, 1)  # 64*2
         self.output_layer = OutSoftmax()
 
         # with torch.no_grad():
@@ -45,17 +45,17 @@ class LogoDetection(nn.Module):
         # query = samples[:, 0]
         # target = samples[:, 1]
         z = self.latent_repr(query)
-        print(z.shape)
+        # print(z.shape)
 
         # Encoder + Conditioning
         x = self.input_layer(target)
 
         tile = z.expand(z.shape[0], z.shape[1], 128, 128)
-        print(tile.shape)
+        # print(tile.shape)
         x1 = torch.cat((x, tile), dim=1)
         x = self.down_layer1(x)
 
-        tile =  z.expand(z.shape[0], z.shape[1], 64, 64)
+        tile = z.expand(z.shape[0], z.shape[1], 64, 64)
         x2 = torch.cat((x, tile), dim=1)
         x = self.down_layer2(x)
 
@@ -69,13 +69,13 @@ class LogoDetection(nn.Module):
 
         tile = z.expand(z.shape[0], z.shape[1], 8, 8)
         x5 = torch.cat((x, tile), dim=1)
-        print(x.shape)
+        # print(x.shape)
 
         # Decoder + Conditioning
         x = torch.cat((x, x5), dim=1)
-        print(x.shape)
+        # print(x.shape)
         x = self.up1(x)
-        print(x.shape)
+        # print(x.shape)
 
         x4 = self.one_conv4(x4)
         x = torch.cat((x, x4), dim=1)
