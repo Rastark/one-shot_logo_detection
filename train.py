@@ -20,7 +20,7 @@ from eval import eval
 # todo: when we add more models, we should move these variables to another location
 MODEL_HOME = os.path.abspath("./stored_models/")
 ALL_MODEL_NAMES = ["LogoDetection"]
-ALL_DATASET_NAMES = ["FlickrLogos-32", "TopLogos-10"]
+ALL_DATASET_NAMES = ["FlickrLogos-32", "FlickrLogos-32-test", "TopLogos-10"]
 
 with open(os.path.abspath("./config/config.yaml")) as config:
     config_list = yaml.load(config, Loader=yaml.FullLoader)
@@ -303,6 +303,7 @@ if __name__ == '__main__':
     print("Loading %s dataset..." % args.dataset)
     # you can delete this "save_to_disk" to preserve the ssd :like:
     dataset = BasicDataset(imgs_dir=imgs_dir, masks_dir=masks_dir, dataset_name=args.dataset)
+    print (str(dataset.imgs_dir))
 
     # Splitting dataset
     n_val = int(len(dataset) * args.val_split)

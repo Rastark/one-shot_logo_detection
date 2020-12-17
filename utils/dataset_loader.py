@@ -58,7 +58,7 @@ class BasicDataset(Dataset):
         self.images_path = []
 
         # TODO: Fai in modo che preprocess calcoli sia la maschera che il bbox e poi, in base al dataset, togline uno
-        if dataset_name == "FlickrLogos-32":
+        if dataset_name == "FlickrLogos-32" or dataset_name =="FlickrLogos-32-test":
             self.flickrlogos32_load()
         elif dataset_name == "TopLogos-10":
             self.toplogos10_load()
