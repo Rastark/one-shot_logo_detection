@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from skimage.measure import label, regionprops
+import logging
 
 
 def eval(model,
@@ -23,9 +24,12 @@ def eval(model,
          iou_thr: int = 0.5
          ):
     model.eval()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s: %(message)s", filename='oneshot_eval.log')
 
     # Number of batches
     n_val = len(loader)
+
+    logging.info(f"n_val: {n_val}")
     
     matches = 0
 
@@ -36,6 +40,8 @@ def eval(model,
         truth_type = "bbox"
     else:
         truth_type = "mask"
+    
+    logging.info(f"type of ground truth: {truth_type}")
 
     precisions, recalls, accuracies = [], [], []
 
@@ -43,6 +49,7 @@ def eval(model,
 
     with tqdm(total=n_val, desc='Validation round', unit='batch', leave=False, disable=not verbose) as bar:
         for batch in loader:
+            logging.info(f"New batch!")
             queries, targets, truth = batch['query'], batch['target'], batch[truth_type]
             queries = queries.to(device=device, dtype=torch.float32)
             targets = targets.to(device=device, dtype=torch.float32)
@@ -50,7 +57,9 @@ def eval(model,
 
             with torch.no_grad():
                 pred = model(queries, targets)
+                logging.info(f"Masks predicted")
                 pred_masks = pred.cpu().numpy()
+                logging.info(f"Masks to CPU")
                 # assunzione: gli indici della true e pred masks sono gli stessi
                 for mask_index in range(pred_masks.shape[0]):
                     pred_mask = np.asarray(pred_masks[mask_index])
@@ -75,6 +84,8 @@ def eval(model,
                     
                     b_result = get_pred_results(truth_bboxes, pred_bboxes, iou_thr)
                     batch_results.append(b_result)
+                
+                logging.info(f"Batch finished. batch_results: {batch_results}")
 
     # Should not be here, since the eval method is used in both validation and test -> TODO: better handling of the flag.
     model.train()

@@ -65,7 +65,7 @@ def train(model,
 
     last_epoch_val_score = 0
     for epoch in range(max_epochs):
-        logging.info(f"Epoch number {epoch}")
+        logging.info(f"Epoch number #insert_epoch_number")
         model.train()  # set the model in training flag to True
         epoch_loss = 0  # resets the loss for the current epoch
         # epoch(batch_size, train_samples)
