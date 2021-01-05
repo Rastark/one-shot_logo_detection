@@ -15,8 +15,18 @@ datasets:
         images: "./data/dataset/FlickrLogos-v2-test/classes/jpg"
         masks: "./data/dataset/FlickrLogos-v2-test/classes/masks"
       bbox_suffix: ".bboxes.txt"
+  FlickrLogos_test_split:
+      paths:
+        images: "./data/dataset/FlickLogos_test_split/classes/jpeg"
+        masks: "./data/dataset/FlickLogos_test_split/classes/masks"
+      bbox_suffix: ".bboxes.txt"
   TopLogos-10:
       paths:
         images: "./data/dataset/qmul_toplogo10/jpg"
         masks: "./data/dataset/qmul_toplogo10/masks"
+      bbox_suffix: ".bboxes.txt"
+  TopLogos-10-Flickr-32-test:
+      paths:
+        images: "./data/dataset/FlickrLogos-v2-test/classes/jpg"
+        masks: "./data/dataset/FlickrLogos-v2-test/classes/masks"
       bbox_suffix: ".bboxes.txt"

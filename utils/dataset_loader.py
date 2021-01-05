@@ -2,6 +2,7 @@ import os
 import numpy as np
 from torch.utils.data import Dataset
 import logging
+import PIL
 from PIL import Image
 
 import torch
@@ -10,6 +11,8 @@ import gzip
 import shutil
 import h5py
 import tables
+
+from eval import get_mask_from_bbox
 
 
 # TODO: Deve preprocessare anche le immagini di test
@@ -58,10 +61,11 @@ class BasicDataset(Dataset):
         self.images_path = []
 
         # TODO: Fai in modo che preprocess calcoli sia la maschera che il bbox e poi, in base al dataset, togline uno
-        if dataset_name == "FlickrLogos-32" or dataset_name =="FlickrLogos-32-test":
+        if "FlickrLogos" in dataset_name:
             self.flickrlogos32_load()
-        elif dataset_name == "TopLogos-10":
+        elif "TopLogos-10" in dataset_name:
             self.toplogos10_load()
+        print(f"You have {len(self.images_path)} triplets")
 
     def __len__(self):
         return len(self.images_path)
@@ -89,7 +93,7 @@ class BasicDataset(Dataset):
                 if target_image_extension == ".jpg":
                     self.images_path.append(
                         {self.TARGET_IMAGE_PATH: get_class_file_path(target_images_paths, target_image_name),
-                         self.MASK_IMAGE_PATH: None,
+                         self.MASK_IMAGE_PATH: f"{get_class_file_path(target_images_paths, target_image_name)}{self.bbox_suffix}",
                          self.BBOX_PATH: bbox_path,
                          self.TARGET_IMAGE_BBOX_PATH: query_full_image_path})
 
@@ -146,7 +150,6 @@ class BasicDataset(Dataset):
                                                  self.MASK_IMAGE_PATH: mask_image_path,
                                                  self.BBOX_PATH: bbox_path,
                                                  self.TARGET_IMAGE_BBOX_PATH: outer_target_image_path})
-        print(f"You have {len(self.images_path)} triplets")
 
     # preprocess the images. then save in file and return a list triplet [query image, target image, mask image]. how?
     # stretch the target image
@@ -157,6 +160,10 @@ class BasicDataset(Dataset):
     def preprocess(cls, target_img_path: str, bbox_path: str, query_full_img_path: str, skip_bbox_lines: int = 0,
                    img_dim: int = 256, query_img_dim: int = 64, mask_img_path: str = None) -> dict:
 
+        print(f"target_img_path: {target_img_path}")
+        print(f"mask_img_path: {mask_img_path}")
+        print(f"query_full_img_path: {query_full_img_path}")
+        print(f"bbox_path: {bbox_path}")
         # Target image
 
         pil_target_img = Image.open(target_img_path)
@@ -200,11 +207,31 @@ class BasicDataset(Dataset):
 
         # Mask
 
-        if mask_img_path:
+        try:
             pil_mask = Image.open(mask_img_path)
             pil_resized_mask = pil_mask.resize((img_dim, img_dim))
-        else:
-            pil_resized_mask = None
+        except:
+            target_img_width, target_img_height = pil_target_img.size
+            resized_target_img_width, resized_target_img_height = pil_resized_target_img.size
+            percent_width = round(100 * int(resized_target_img_width) / (int(target_img_width)), 2) / 100
+            percent_height = round(100 * int(resized_target_img_height) / (int(target_img_height)), 2) / 100
+            with open(mask_img_path, mode='r') as f:
+                bbox_lines = f.readlines()
+                l = []
+                for y in range(1 - skip_bbox_lines, len(bbox_lines)):
+                    x, y, width, height = bbox_lines[y].rstrip().split(' ')
+                    x = int(int(x.strip()) * percent_width)
+                    y = int(int(y.strip()) * percent_height)
+                    width = int(int(width.strip()) * percent_width)
+                    height = int(int(height.strip()) * percent_height)
+                    l.append((x, y, width, height))
+            pil_resized_mask = get_mask_from_bbox(l)
+            # import sys
+            # import numpy
+            # numpy.set_printoptions(threshold=sys.maxsize)
+            # print(f"pil_resized_mask: {pil_resized_mask}")
+            pil_resized_mask = Image.fromarray(pil_resized_mask)
+            # pil_resized_mask = pil_resized_mask.resize((img_dim, img_dim))
 
         # get the size of the images
         # print(f"query image dim: {pil_resized_query_img.size}")
@@ -354,7 +381,7 @@ class BasicDataset(Dataset):
 
 def to_pytorch(image):
     if image:
-        image_np = np.array(image)
+        image_np = np.asarray(image)
         # mask image has only one channel, we need to explicit it
         if len(image_np.shape) == 2:
             image_np = np.expand_dims(image_np, axis=2)
