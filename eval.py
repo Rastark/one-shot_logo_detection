@@ -52,20 +52,12 @@ def eval_net(model,
 
     with tqdm(total=n_val, desc='Validation round', unit='samples', disable=not verbose) as bar:
         for batch in loader:
-#             logging.info(f"New batch!")
-#             print(f"batch: {batch}")
             queries, targets, truth = batch['query'], batch['target'], batch[truth_type]
             queries = queries.to(device=device, dtype=torch.float32)
             targets = targets.to(device=device, dtype=torch.float32)
             
-            # truth = truth.to(device=device, dtype=torch.float32)
-            
-#             print(f"eval.py -> truth: {truth}")
-
             with torch.no_grad():
                 pred = model(queries, targets)
-#                 logging.info(f"Masks predicted")
-#                 print(f"pred: {pred}")
                 pred_masks = pred.cpu().numpy()
 #                 print(f"pred_masks: {pred_masks}")
 #                 logging.info(f"Masks to CPU")
@@ -234,7 +226,21 @@ def calc_accuracy(true_pos, false_pos, false_neg):
     return accuracy 
 
 
-def calc_mavg_precision(precision_array):
+def precision_recall_curve(y_true, pred_scores, thresholds=None):
+    if (thresholds is None):
+        thresholds = numpy.arange(start=0.55, stop=0.95, step=0.05)
+    precisions = []
+    recalls = []
+    accuracies = []
+    for threshold in thresholds:
+        precision, recall, accuracy = get_pred_results(truth_bboxes=y_true, pred_bboxes=pred_scores, iou_thr=threshold)
+        precisions.append(precision)
+        recalls.append(recall)
+        accuracies.append(accuracy)
+    return precisions, recalls, accuracies
+
+
+def calc_mavg_precision(precision_array): 
     return 
 
 
