@@ -324,7 +324,7 @@ if __name__ == '__main__':
     # Optimizer selection
     # build all the supported optimizers using the passed params (learning rate and decays if Adam)
     supported_optimizers = {
-        'Adam': optim.Adam(params=model.parameters(), lr=args.learning_rate, betas=(args.decay1, args.decay2),
+        'Adam': optim.Adam(params=model.parameters(), lr=args.learning_rate, betas=(args.decay1, args.decay2, ),
                            weight_decay=args.weight_decay),
         'SGD': optim.SGD(params=model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     }
