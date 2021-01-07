@@ -228,7 +228,7 @@ def calc_accuracy(true_pos, false_pos, false_neg):
 
 def precision_recall_curve(y_true, pred_scores, thresholds=None):
     if (thresholds is None):
-        thresholds = numpy.arange(start=0.55, stop=0.95, step=0.05)
+        thresholds = numpy.arange(start=0.50, stop=0.95, step=0.05)
     precisions = []
     recalls = []
     accuracies = []
