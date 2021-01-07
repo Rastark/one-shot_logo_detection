@@ -257,16 +257,16 @@ def get_jaccard_from_mask(pred_mask, truth):
 
 
 def get_mask_from_bbox(bboxes):
-#     print(f"eval.py -> bbox: {bboxes}")
+    # print(f"eval.py -> bbox: {bboxes}")
     mask = np.zeros((256, 256))
     if type(bboxes) is list:
         for bbox in bboxes:
-#             print(f"bbox: {bbox}")
+            # print(f"bbox: {bbox}")
             x = bbox[0]
             y = bbox[1]
             for width in range(bbox[2]):
                 for height in range(bbox[3]):
-                    mask[(int(x) + int(width)), (int(y) + int(height))] = 1
+                    mask[(int(y) + int(height)), (int(x) + int(width))] = 1
     else:
         bbox = bboxes
         x = bbox[0]
