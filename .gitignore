@@ -137,3 +137,5 @@ INTERRUPTED.ph
 .idea
 notebook_comments.md
 logs/
+scripts/train_loss*
+scripts/train_loss.png

@@ -23,7 +23,8 @@ def eval_net(model,
          device, 
          bbox: bool, 
          verbose: bool,
-         iou_thr: int = 0.5
+         iou_thr: int = 0.5,
+         coco_map: bool = False
          ):
 #     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s: %(message)s", filename='oneshot_eval.log')
     model.eval()
@@ -96,9 +97,12 @@ def eval_net(model,
                     logging.info(f"pred_bboxes: {pred_bboxes}")
                     logging.info(f"truth_bboxes: {truth_bboxes}")
                     
-                    b_result = get_pred_results(truth_bboxes, pred_bboxes, iou_thr)
+                    if coco_map is True:
+                        b_result = get_pred_results_for_thresholds(truth_bboxes, pred_bboxes)
+                    else:
+                        b_result = get_pred_results(truth_bboxes, pred_bboxes, iou_thr)
                     logging.info(f"b_result: {b_result}")
-#                     print(f"b_result: {b_result}")
+#                   print(f"b_result: {b_result}")
                     batch_results.append(b_result)
                 bar.update(queries.shape[0])
                 
@@ -110,27 +114,33 @@ def eval_net(model,
     
 #     print(f"Batch results: {batch_results}")
     
-    result = dict(functools.reduce(operator.add, map(collections.Counter, batch_results)))
-    logging.info(f"result: {result}")
+    # result = dict(functools.reduce(operator.add, map(collections.Counter, batch_results)))
+    # result = list(map(sum(b_results)))
+    results = sum(batch_results, 0)
+    logging.info(f"results: {results}")
 #     print("result: ", str(result))
     # TODO: KeyError è troppo generico
+    n_thr = result.shape[0]
     try:
-        true_pos = result['true_pos']
-    except KeyError:
-        true_pos = 0
+        true_pos_list = result[:,0]
+    except:
+        for i in range(n_thr):
+            true_pos_list.append(0)
     try:
-        false_pos = result['false_pos']
-    except KeyError:
-        false_pos = 0
+        false_pos = result[:,1]
+    except:
+        for i in range(n_thr):
+            false_pos_list.append(0)
     try:
-        false_neg = result['false_neg']
-    except KeyError:
-        false_neg = 0
-
-    precision = calc_precision(true_pos, false_pos)
-    recall = calc_recall(true_pos, false_neg)
-    accuracy = calc_accuracy(true_pos, false_pos, false_neg)
-    output = f"Precision: {precision}    Recall: {recall}    Accuracy: {accuracy}"
+        false_neg = result[:,2]
+    except:
+        for i in range(n_thr):
+            false_neg_list.append(0)
+    # precision = calc_precision(true_pos, false_pos)
+    # recall = calc_recall(true_pos, false_neg)
+    # accuracy = calc_accuracy(true_pos, false_pos, false_neg)
+    precisions, recalls, accuracies = precision_recall_curve(true_pos_list, false_pos_list, false_neg_list)
+    output = f"Precisions: {precisions}    Recalls: {recalls}    Accuracies: {accuracies}"
     print(output)
     logging.info(output)
 
@@ -199,7 +209,7 @@ def get_pred_results(truth_bboxes, pred_bboxes, iou_thr = 0.5):
         tp = len(truth_match_idxes)
         fp = len(pred_bboxes) - len(pred_match_idxes)
         fn = len(truth_bboxes) - len(truth_match_idxes)
-    return {'true_pos': tp, 'false_pos': fp, 'false_neg': fn}
+    return tp, fp, fn
 
 
 def calc_precision(true_pos, false_neg):
@@ -226,19 +236,24 @@ def calc_accuracy(true_pos, false_pos, false_neg):
     return accuracy 
 
 
-def precision_recall_curve(y_true, pred_scores, thresholds=None):
+def get_results_for_thresholds(y_true, pred_scores, thresholds=None):
     if (thresholds is None):
         thresholds = numpy.arange(start=0.50, stop=0.95, step=0.05)
-    precisions = []
-    recalls = []
-    accuracies = []
+    output = []
     for threshold in thresholds:
-        precision, recall, accuracy = get_pred_results(truth_bboxes=y_true, pred_bboxes=pred_scores, iou_thr=threshold)
-        precisions.append(precision)
-        recalls.append(recall)
-        accuracies.append(accuracy)
-    return precisions, recalls, accuracies
+        true_pos, false_pos, false_neg = get_pred_results(truth_bboxes=y_true, pred_bboxes=pred_scores, iou_thr=threshold)
+        output.append((true_pos, false_pos, false_neg))
+    return np.array(output)
 
+
+def precision_recall_curve(true_pos_list, false_pos_list, false_neg_list):
+    precisions, recalls, accuracies = [], [], []
+    for true_pos, false_pos, false_neg in zip(true_pos_list, false_pos_list, false_neg):
+        precisions.append(calc_precision(true_pos, false_pos, false_neg))
+        recalls.append(calc_precision(true_pos, false_pos, false_neg))
+        accuracies.append(calc_precision(true_pos, false_pos, false_neg))
+    return precisions, recalls, accuracies
+        
 
 def calc_mavg_precision(precision_array): 
     return 
