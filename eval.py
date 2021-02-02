@@ -19,23 +19,18 @@ from PIL import Image
 
 
 def eval_net(model,
-         loader, 
-         device, 
-         bbox: bool, 
-         verbose: bool,
-         iou_thr: int = 0.5,
-         coco_map: bool = True
-         ):
-#     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s: %(message)s", filename='oneshot_eval.log')
+             loader,
+             device,
+             bbox: bool,
+             verbose: bool,
+             iou_thr: int = 0.5,
+             coco_map: bool = True
+             ):
     model.eval()
     logging.info("Validating")
 
     # Number of batches
     n_val = len(loader)
-
-#     logging.info(f"n_val: {n_val}")
-    
-    matches = 0
 
     # Number of bboxes
     max_matches = 0
@@ -44,10 +39,8 @@ def eval_net(model,
         truth_type = "bbox"
     else:
         truth_type = "mask"
-    
-#     logging.info(f"type of ground truth: {truth_type}")
 
-    precisions, recalls, accuracies = [], [], []
+    # precisions, recalls, accuracies = [], [], []
 
     batch_results = []
 
@@ -56,30 +49,18 @@ def eval_net(model,
             queries, targets, truth = batch['query'], batch['target'], batch[truth_type]
             queries = queries.to(device=device, dtype=torch.float32)
             targets = targets.to(device=device, dtype=torch.float32)
-            
+
             with torch.no_grad():
                 pred = model(queries, targets)
                 pred_masks = pred.cpu().numpy()
-#                 print(f"pred_masks: {pred_masks}")
-#                 logging.info(f"Masks to CPU")
-#                 print(f"pred_masks_shape_0: {pred_masks.shape[0]}")
-#                 print(f"pred_masks: {pred_masks}")
-                # assunzione: gli indici della true e pred masks sono gli stessi
                 for mask_index in range(pred_masks.shape[0]):
                     pred_mask = np.asarray(pred_masks[mask_index])
-#                     print(f"pred_mask: {pred_mask}")
                     pred_mask = masks_as_image([rle_encode(pred_mask)])
 
-#                     print(f"pred_mask_shape: {pred_mask.shape}")
-#                     logging.info(f"pred_mask.mask_as_image: {pred_mask}")
-#                     pred_mask_img = Image.fromarray(pred_mask).save('/home/nvidia/workspace/alessandroaurora/one-shot_logo_detection/img.jpg')
-                    
                     # mask labeling and conversion to bboxes
                     pred_labels = label(pred_mask)
-#                     print(f"pred_labels: {pred_labels}")
                     pred_bboxes_coords = list(map(lambda x: x.bbox, regionprops(pred_labels)))
                     pred_bboxes = calc_bboxes_from_coords(pred_bboxes_coords)
-#                     print("pred_bboxes: ", pred_bboxes)
 
                     # computes truth bboxes in the same way as the pred
                     if bbox:
@@ -93,104 +74,86 @@ def eval_net(model,
                         print("truth_bboxes: ", truth_bboxes)
 
                     max_matches += len(truth_bboxes)
-    
+
                     logging.info(f"pred_bboxes: {pred_bboxes}")
                     logging.info(f"truth_bboxes: {truth_bboxes}")
-                    
+
                     if coco_map is True:
                         b_result = get_pred_results_thresholds(truth_bboxes, pred_bboxes)
                     else:
                         b_result = get_pred_results(truth_bboxes, pred_bboxes, iou_thr)
                     logging.info(f"b_result: {b_result}")
-#                   print(f"b_result: {b_result}")
+                    #                   print(f"b_result: {b_result}")
                     batch_results.append(b_result)
                 bar.update(queries.shape[0])
-                
-#                 logging.info(f"Batch finished. batch_results: {batch_results}")
 
-#     print(f"Validation from eval completed")
     # Should not be here, since the eval method is used in both validation and test -> TODO: better handling of the flag.
     model.train()
-    
-#     print(f"Batch results: {batch_results}")
-    
-    # result = dict(functools.reduce(operator.add, map(collections.Counter, batch_results)))
-    # result = list(map(sum(b_results)))
+
     results = sum(batch_results, 0)
     logging.info(f"results: {results}")
-#     print("result: ", str(result))
-    # TODO: KeyError è troppo generico
     n_thr = results.shape[0]
     try:
-        true_pos_list = results[:,0]
+        true_pos_list = results[:, 0]
     except:
         for i in range(n_thr):
             true_pos_list.append(0)
     try:
-        false_pos_list = results[:,1]
+        false_pos_list = results[:, 1]
     except:
         for i in range(n_thr):
             false_pos_list.append(0)
     try:
-        false_neg_list = results[:,2]
+        false_neg_list = results[:, 2]
     except:
         for i in range(n_thr):
             false_neg_list.append(0)
-    # precision = calc_precision(true_pos, false_pos)
-    # recall = calc_recall(true_pos, false_neg)
-    # accuracy = calc_accuracy(true_pos, false_pos, false_neg)
     precisions, recalls, accuracies = precision_recall_curve(true_pos_list, false_pos_list, false_neg_list)
     output = f"Precisions: {precisions}    Recalls: {recalls}    Accuracies: {accuracies}"
     print(output)
     logging.info(output)
-    
+
     # P-R curve
     plt.plot(recalls, precisions, linewidth=4, color="red")
     plt.xlabel("Recall", fontsize=12, fontweight='bold')
     plt.ylabel("Precision", fontsize=12, fontweight='bold')
     plt.title("Precision-Recall Curve", fontsize=15, fontweight="bold")
     plt.show()
-    
+
     precisions.append(1)
     recalls.append(0)
-    
+
     precisions = np.array(precisions)
     recalls = np.array(recalls)
     accuracies = np.array(accuracies)
-    
+
     AP = np.sum((recalls[:-1] - recalls[1:]) * precisions[:-1])
     logging.info(f'Avg Precision: {AP}')
     print(AP)
-    
+
     return AP
 
 
 def calc_bboxes_from_coords(bboxes_coords):
     """Calculate all bounding boxes from a set of bounding boxes coordinates"""
     bboxes = []
-#     print(f"bboxes_coords: {bboxes_coords}")
     for coord_idx in range(len(bboxes_coords)):
-#         print(f"coord_idx: {coord_idx}")
         coord = bboxes_coords[coord_idx]
-#         print(f"coord: {coord}")
-        bbox = (coord[1], coord[0], int(coord[4])-int(coord[1]), int(coord[3])-int(coord[0]))
+        bbox = (coord[1], coord[0], int(coord[4]) - int(coord[1]), int(coord[3]) - int(coord[0]))
         bboxes.append(bbox)
     return bboxes
 
 
-def get_pred_results(truth_bboxes, pred_bboxes, iou_thr = 0.5):
-#     print(f"eval.py -> truth_bboxes: {truth_bboxes}")
+def get_pred_results(truth_bboxes, pred_bboxes, iou_thr=0.5):
     """Calculates true_pos, false_pos and false_neg from the input bounding boxes. """
     n_pred_idxs = range(len(pred_bboxes))
     n_truth_idxs = range(len(truth_bboxes))
     if len(n_pred_idxs) == 0:
-#         print(f"n_pred_idxs = 0")
         tp = 0
         fp = 0
         fn = len(truth_bboxes)
         return tp, fp, fn
     if len(n_truth_idxs) == 0:
-#         print(f"n_truth_idxs = 0")
         tp = 0
         fp = len(pred_bboxes)
         fn = 0
@@ -206,7 +169,6 @@ def get_pred_results(truth_bboxes, pred_bboxes, iou_thr = 0.5):
                 truth_idx_thr.append(truth_idx)
                 pred_idx_thr.append(pred_idx)
                 ious.append(iou)
-#     print(f"ious: {ious}")
     # ::-1 reverses the list
     ious_desc = np.argsort(ious)[::-1]
     if len(ious_desc) == 0:
@@ -251,15 +213,16 @@ def calc_accuracy(true_pos, false_pos, false_neg):
         accuracy = true_pos / (true_pos + false_pos + false_neg)
     except ZeroDivisionError:
         accuracy = 0.0
-    return accuracy 
+    return accuracy
 
 
 def get_pred_results_thresholds(y_true, pred_scores, thresholds=None):
-    if (thresholds is None):
+    if thresholds is None:
         thresholds = np.arange(start=0.50, stop=0.95, step=0.05)
     output = []
     for threshold in thresholds:
-        true_pos, false_pos, false_neg = get_pred_results(truth_bboxes=y_true, pred_bboxes=pred_scores, iou_thr=threshold)
+        true_pos, false_pos, false_neg = get_pred_results(truth_bboxes=y_true, pred_bboxes=pred_scores,
+                                                          iou_thr=threshold)
         output.append((true_pos, false_pos, false_neg))
     return np.array(output)
 
@@ -271,30 +234,18 @@ def precision_recall_curve(true_pos_list, false_pos_list, false_neg_list):
         recalls.append(calc_recall(true_pos, false_neg))
         accuracies.append(calc_accuracy(true_pos, false_pos, false_neg))
     return precisions, recalls, accuracies
-        
-
-def calc_mavg_precision(precision_array): 
-    return 
 
 
 def get_jaccard(pred_bbox, truth_bbox):
     pred_mask = get_mask_from_bbox(pred_bbox)
     truth_mask = get_mask_from_bbox(truth_bbox)
-    return get_jaccard_from_mask(pred_mask, truth_mask)
-
-
-def get_jaccard_from_mask(pred_mask, truth):
-#     print(f"jsc truth: {truth}")
-#     print(f"jsc pred_mask: {pred_mask}")
-    return jsc(y_true=truth, y_pred=pred_mask, average='micro')
+    return jsc(y_true=truth_mask, y_pred=pred_mask, average='micro')
 
 
 def get_mask_from_bbox(bboxes):
-    # print(f"eval.py -> bbox: {bboxes}")
     mask = np.zeros((256, 256))
     if type(bboxes) is list:
         for bbox in bboxes:
-            # print(f"bbox: {bbox}")
             x = bbox[0]
             y = bbox[1]
             for width in range(bbox[2]):
@@ -324,7 +275,7 @@ def get_bbox(img):
     rmin, rmax = np.where(rows)[0][[0, -1]]
     cmin, cmax = np.where(cols)[0][[0, -1]]
     # X, Y, Width, Height
-    return [cmin, rmin, cmax-cmin, rmax-rmin]
+    return [cmin, rmin, cmax - cmin, rmax - rmin]
 
 
 def rle_encode(img):
@@ -332,7 +283,7 @@ def rle_encode(img):
     img: numpy array, 1 - mask, 0 - background
     Returns run length as string formated
     '''
-#     logging.info(f"pred_img: {img}")
+    #     logging.info(f"pred_img: {img}")
     pixels_old = img.T.flatten()
     pixels = img.T.flatten()
     for x in range(len(pixels_old)):
