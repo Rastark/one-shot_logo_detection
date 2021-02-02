@@ -160,10 +160,10 @@ class BasicDataset(Dataset):
     def preprocess(cls, target_img_path: str, bbox_path: str, query_full_img_path: str, skip_bbox_lines: int = 0,
                    img_dim: int = 256, query_img_dim: int = 64, mask_img_path: str = None) -> dict:
 
-        print(f"target_img_path: {target_img_path}")
-        print(f"mask_img_path: {mask_img_path}")
-        print(f"query_full_img_path: {query_full_img_path}")
-        print(f"bbox_path: {bbox_path}")
+#        print(f"target_img_path: {target_img_path}")
+#        print(f"mask_img_path: {mask_img_path}")
+#        print(f"query_full_img_path: {query_full_img_path}")
+#        print(f"bbox_path: {bbox_path}")
         # Target image
 
         pil_target_img = Image.open(target_img_path)

@@ -35,3 +35,8 @@ datasets:
         images: "./data/dataset/FlickrLogos-v2-12/classes/jpg"
         masks: "./data/dataset/FlickrLogos-v2-12/classes/masks"
       bbox_suffix: ".bboxes.txt"
+  TopLogos-10-Flickr-12-test:
+      paths:
+        images: "./data/dataset/FlickrLogos-v2-12/classes/jpg"
+        masks: "./data/dataset/FlickrLogos-v2-12/classes/masks"
+      bbox_suffix: ".bboxes.txt"
