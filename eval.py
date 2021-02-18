@@ -1,21 +1,10 @@
-import functools, operator, collections
 import torch
-import torch.nn.functional as F
 import numpy as np
-
 from sklearn.metrics import jaccard_score as jsc
-from sklearn.metrics import average_precision_score as avg_pr
-from sklearn.cluster import DBSCAN
-from sklearn import metrics
-
 import matplotlib.pyplot as plt
 import logging
-
 from tqdm import tqdm
-
 from skimage.measure import label, regionprops
-import PIL
-from PIL import Image
 
 
 def eval_net(model,
@@ -39,8 +28,6 @@ def eval_net(model,
         truth_type = "bbox"
     else:
         truth_type = "mask"
-
-    # precisions, recalls, accuracies = [], [], []
 
     batch_results = []
 
@@ -83,7 +70,6 @@ def eval_net(model,
                     else:
                         b_result = get_pred_results(truth_bboxes, pred_bboxes, iou_thr)
                     logging.info(f"b_result: {b_result}")
-                    #                   print(f"b_result: {b_result}")
                     batch_results.append(b_result)
                 bar.update(queries.shape[0])
 
@@ -125,7 +111,7 @@ def eval_net(model,
 
     precisions = np.array(precisions)
     recalls = np.array(recalls)
-    accuracies = np.array(accuracies)
+    # accuracies = np.array(accuracies)
 
     AP = np.sum((recalls[:-1] - recalls[1:]) * precisions[:-1])
     logging.info(f'Avg Precision: {AP}')
