@@ -5,10 +5,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
+from scipy.ndimage.filters import gaussian_filter1d
+
 # Path config
 rootpath = os.path.abspath('../')
 log_path = os.path.join(rootpath, 'logs/train/')
-log_file = os.path.join(log_path, 'oneshot.log')
+log_file = os.path.join(log_path, 'oneshot_20_cfgB.log')
 
 regex_loss = 'Train epoch loss: [0-9]*\.[0-9]*'
 regex_epoch = 'Epoch number [0-9]'
@@ -38,11 +40,15 @@ n_samples = n_epoch_batches * 32 # n_batch * batch_size
 
 # Data for plotting
 # loss_range = np.arange(0.0, max(all_losses), 0.001)
-epoch_range = np.arange(0.0, n_epochs, 1)
+epoch_range = np.arange(1, n_epochs+1, 1)
 
 fig, ax = plt.subplots()
 ax.plot(epoch_range, all_losses)
 
+y_train_smoothed = gaussian_filter1d(all_losses, sigma=2)
+ax.plot(epoch_range, y_train_smoothed, 'c')
+
+ax.legend(('original', 'smooth'), ('b', 'c'))
 ax.set(xlabel='epoch', ylabel='BCELoss', title='Training Loss')
 ax.grid()
 
