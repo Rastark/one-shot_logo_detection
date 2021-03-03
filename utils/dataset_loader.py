@@ -16,7 +16,7 @@ class BasicDataset(Dataset):
 
     # TODO: Check if the values are empty
     def __init__(self, imgs_dir: str, masks_dir: str, dataset_name: str, mask_img_dim: int = 256, query_dim: int = 64,
-                 bbox_suffix: str = '.bboxes.txt', save_to_disk: bool = False, skip_bbox_lines: int = 0):
+                 bbox_suffix: str = '.bboxes.txt', save_to_disk: bool = False):
         assert imgs_dir is not None and imgs_dir is not "", 'Please insert a directory for the images'
         assert masks_dir is not None and masks_dir is not "", 'Please insert a directory for the masks'
         assert dataset_name is not None and dataset_name is not "", 'Please insert the name of the dataset'
@@ -30,7 +30,6 @@ class BasicDataset(Dataset):
         self.query_dim = query_dim
         self.bbox_suffix = bbox_suffix
         self.save_to_disk = save_to_disk
-        self.skip_bbox_lines = skip_bbox_lines
 
         assert os.path.isdir(self.imgs_dir), f"Bad path for images directory: {self.imgs_dir}"
         assert os.path.isdir(self.masks_dir), f"Bad path for masks directory: {self.masks_dir}"
@@ -142,7 +141,7 @@ class BasicDataset(Dataset):
     # stretch the mask image
     # TODO: Check if the values are empty
     @classmethod
-    def preprocess(cls, target_img_path: str, bbox_path: str, query_full_img_path: str, skip_bbox_lines: int = 0,
+    def preprocess(cls, target_img_path: str, bbox_path: str, query_full_img_path: str,
                    img_dim: int = 256, query_img_dim: int = 64, mask_img_path: str = None) -> dict:
         # Target image #
 
@@ -162,25 +161,30 @@ class BasicDataset(Dataset):
         percent_height = round(100 * int(resized_target_img_height) / (int(target_img_height)), 2) / 100
 
         # open the bounding box file
+        first_line_bbox = 0
         with open(bbox_path) as bbox_file:
             # read only the first line of the bbox file
             bbox_lines = bbox_file.readlines()
-            first_line_bbox = bbox_lines[skip_bbox_lines].split(' ')
-            # check if we correctly skipped the first line of the file, the one with no number,
-            # and if all the elements are numeric, like every coordinate should be ;)
-            if first_line_bbox[0].isnumeric() and first_line_bbox[1].isnumeric() and \
-                    first_line_bbox[2].isnumeric() and first_line_bbox[3].rstrip().isnumeric():
-                x, y, width, height = first_line_bbox
-                # adapt the old coordinates to the new stretched dimension
-                left = int(x.strip()) * percent_width
-                upper = int(y.strip()) * percent_height
-                right = int(int(x.strip()) + int(width)) * percent_width
-                lower = int(int(y.strip()) + int(height)) * percent_height
-                # crop and resize the query image
-                pil_query_img = pil_resized_target_img_bbox.crop((left, upper, right, lower))
-                pil_resized_query_img = pil_query_img.resize((query_img_dim, query_img_dim))
+            bbox_lines_count = len(bbox_lines)
+            for i in range(0, bbox_lines_count + 1):
+                current_line_bbox = bbox_lines[i].split(' ')
+                # check if we correctly skipped the first line of the file, the one with no number,
+                # and if all the elements are numeric, like every coordinate should be ;)
+                if current_line_bbox[0].isnumeric() and current_line_bbox[1].isnumeric() and \
+                        current_line_bbox[2].isnumeric() and current_line_bbox[3].rstrip().isnumeric():
+                    x, y, width, height = current_line_bbox
+                    # adapt the old coordinates to the new stretched dimension
+                    left = int(x.strip()) * percent_width
+                    upper = int(y.strip()) * percent_height
+                    right = int(int(x.strip()) + int(width)) * percent_width
+                    lower = int(int(y.strip()) + int(height)) * percent_height
+                    # crop and resize the query image
+                    pil_query_img = pil_resized_target_img_bbox.crop((left, upper, right, lower))
+                    pil_resized_query_img = pil_query_img.resize((query_img_dim, query_img_dim))
+                    first_line_bbox = i
+                    break
             else:
-                error_string = f"Bounding box file's first line should have 4 groups of integers with whitespace " \
+                error_string = f"Bounding box file should have 4 groups of integers with whitespace " \
                                f"separator. Check {bbox_path}"
                 raise Exception(error_string)
 
@@ -189,7 +193,7 @@ class BasicDataset(Dataset):
         try:
             pil_mask = Image.open(mask_img_path)
             pil_resized_mask = pil_mask.resize((img_dim, img_dim))
-        except FileNotFoundError:
+        except:
             target_img_width, target_img_height = pil_target_img.size
             resized_target_img_width, resized_target_img_height = pil_resized_target_img.size
             percent_width = round(100 * int(resized_target_img_width) / (int(target_img_width)), 2) / 100
@@ -197,7 +201,7 @@ class BasicDataset(Dataset):
             with open(mask_img_path, mode='r') as f:
                 bbox_lines = f.readlines()
                 bboxes = []
-                for y in range(skip_bbox_lines, len(bbox_lines)):
+                for y in range(first_line_bbox, len(bbox_lines)):
                     x, y, width, height = bbox_lines[y].rstrip().split(' ')
                     x = int(int(x.strip()) * percent_width)
                     y = int(int(y.strip()) * percent_height)
@@ -239,8 +243,7 @@ class BasicDataset(Dataset):
                     target_img_path=get_full_path(self.imgs_dir, selected_img[self.TARGET_IMG_PATH]),
                     bbox_path=get_full_path(self.masks_dir, selected_img[self.BBOX_PATH]),
                     query_full_img_path=get_full_path(self.imgs_dir, selected_img[self.QUERY_FULL_IMG_PATH]),
-                    mask_img_path=get_full_path(self.masks_dir, selected_img[self.MASK_IMG_PATH]),
-                    skip_bbox_lines=self.skip_bbox_lines)
+                    mask_img_path=get_full_path(self.masks_dir, selected_img[self.MASK_IMG_PATH]))
                 if self.save_to_disk:
                     store_processed_imgs(self.processed_img_dir, return_dict, item_index)
                 break
